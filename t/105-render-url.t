@@ -487,6 +487,8 @@ sub _start {
     if(!$pid) {
         %ENV = (%ENV, THRUK_RENDER_DEBUG => 1, THRUK_TEST_PIDFILE => $h->{'pidfile'}, %env);
         if(my $cwd = delete $ENV{'THRUK_TEST_CWD'}) {
+            # relative library paths (ex.: PERL5LIB=./lib in CI) cannot be searched from there
+            $ENV{'PERL5LIB'} = join(':', grep { m|^/|mx } split(/:/mx, $ENV{'PERL5LIB'} // ''));
             chdir($cwd) or die("cannot chdir to $cwd: $!");
             chmod(0000, $cwd); # the working directory of the renderer is not accessible now
         }

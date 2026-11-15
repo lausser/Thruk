@@ -114,14 +114,17 @@ if [ -n "$MISSING" ]; then
     echo ""
     echo "install them with:"
     if type dnf >/dev/null 2>&1; then
-        echo "  dnf install alsa-lib atk at-spi2-atk cups-libs libdrm libXcomposite libXdamage libxkbcommon libXrandr mesa-libgbm nss pango cairo"
+        echo "  dnf install alsa-lib atk at-spi2-atk at-spi2-core cups-libs libdrm libXcomposite libXdamage libxkbcommon libXrandr mesa-libgbm nss pango cairo"
     elif type yum >/dev/null 2>&1; then
-        echo "  yum install alsa-lib atk at-spi2-atk libdrm libXcomposite libXdamage libxkbcommon libXrandr mesa-libgbm nss cups-libs pango cairo"
+        echo "  yum install alsa-lib atk at-spi2-atk at-spi2-core libdrm libXcomposite libXdamage libxkbcommon libXrandr mesa-libgbm nss cups-libs pango cairo"
     elif type zypper >/dev/null 2>&1; then
-        echo "  zypper install libasound2 libatk-1_0-0 libatk-bridge-2_0-0 libcups2 libdrm2 libXcomposite1 libXdamage1 libxkbcommon0 libXrandr2 libgbm1 mozilla-nss libpango-1_0-0 libcairo2"
+        echo "  zypper install libasound2 libatk-1_0-0 libatk-bridge-2_0-0 libatspi0 libcups2 libdrm2 libXcomposite1 libXdamage1 libxkbcommon0 libXrandr2 libgbm1 mozilla-nss libpango-1_0-0 libcairo2"
     elif type apt-get >/dev/null 2>&1; then
-        echo "  apt-get install libatk1.0-0 libatk-bridge2.0-0 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxkbcommon0 libxrandr2 libpango-1.0-0 libasound2"
-        echo "  (the last package is called libasound2t64 on newer releases)"
+        ASOUND=libasound2
+        if apt-cache show libasound2t64 >/dev/null 2>&1; then
+            ASOUND=libasound2t64
+        fi
+        echo "  apt-get install libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxkbcommon0 libxrandr2 libpango-1.0-0 $ASOUND"
     else
         echo "  the package manager of your distribution"
     fi
