@@ -2392,6 +2392,7 @@ t/090-io.t
 t/091-io-locked-test.t
 t/092-backticks.t
 t/092-clean_debug.t
+t/092-puppeteer-remnants.t
 t/092-private_subs.t
 t/092-stash-config.t
 t/092-thruk-view-json.t

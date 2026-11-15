@@ -97,7 +97,7 @@ _exe("$tmp/usr/local/bin/chromium");
 ###########################################################
 # the variable of the old renderer has no effect
 {
-    my $old = uc("pup")."PETEER_EXECUTABLE_PATH"; # do not write the old name here, see t/092-puppeteer-remnants.t
+    my $old = uc("pup")."PETEER_EXECUTABLE_PATH"; # do not write the old name here, see the remnants test in t/092-*-remnants.t
     local $ENV{$old} = $setting;
     local $ENV{'THRUK_BROWSER'};
     delete $ENV{'THRUK_BROWSER'};

@@ -49,7 +49,7 @@ _write("$tmp/home_missing/.thruk", "THRUK_BROWSER=$missing\n");
 
 my $c = TestUtils::get_c();
 # folder of the old renderer, it must not count as a browser. The name is put
-# together here, so this file does not contain it, see t/092-puppeteer-remnants.t
+# together here, so this file does not contain it, see the remnants test in t/092-*-remnants.t
 my $leftover = $c->config->{'var_path'}."/pup"."peteer";
 my $created_leftover = 0;
 END {

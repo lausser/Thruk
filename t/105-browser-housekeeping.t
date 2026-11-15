@@ -23,7 +23,7 @@ my $tmp_path = $c->config->{'tmp_path'};
 $tmp_path    =~ s|/+$||mx;
 ok(-d $tmp_path, "tmp_path exists: ".$tmp_path);
 
-# the name of the old renderer is put together here, so this file does not contain it, see t/092-puppeteer-remnants.t
+# the name of the old renderer is put together here, so this file does not contain it, see the remnants test in t/092-*-remnants.t
 my $old_name = "pup"."peteer";
 my $id       = "t".$$;
 my @old = (
