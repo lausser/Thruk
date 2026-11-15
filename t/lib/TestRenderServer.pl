@@ -79,6 +79,7 @@ sub handle {
     }
     if($path =~ m|^/grafana/chart|)     { return reply($client, 200, 'text/html', page('<h1>chart</h1><script>setTimeout(function() { var d = document.createElement("div"); d.className = "flot-text"; d.textContent = "the chart"; document.body.appendChild(d); }, 500);</script>')); }
     if($path =~ m|^/grafana/nochart|)   { return reply($client, 200, 'text/html', page('<h1>no chart here</h1>')); }
+    if($path =~ m|^/grafana/busy|)     { return reply($client, 200, 'text/html', page('<h1>busy</h1><script>setTimeout(function() { for(;;) {} }, 200);</script>')); }
     if($path =~ m|^/grafana/login|)     { return reply($client, 200, 'text/html', page('<form><input id="loginuser" name="login"></form>')); }
     if($path =~ m|^/grafana/alert|)     { return reply($client, 200, 'text/html', page('<div class="alert-error">datasource exploded</div>')); }
     if($path =~ m|\.js(\?.*)?$|)         { return reply($client, 200, 'application/javascript', 'var loaded = 1;'); }

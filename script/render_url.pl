@@ -149,7 +149,6 @@ sub main {
     }
     $msg =~ s/\s+$//mx;
     print $msg, "\n";
-    unlink($partial_output) if defined $partial_output;
     cleanup();
     exit($selftest ? 1 : $rc);
 }
@@ -322,6 +321,11 @@ ends the browser process group and removes the temp folder of this run.
 sub cleanup {
     my $p = $pid;
     $pid = 0;
+    # an output file which has not been written completely, also after a signal
+    if(defined $partial_output) {
+        unlink($partial_output);
+        $partial_output = undef;
+    }
     if($p) {
         kill('TERM', -$p);
         for (1..30) {
@@ -489,8 +493,8 @@ sub _pump {
 
 ###########################################################
 sub _evaluate {
-    my($expr, $await) = @_;
-    my $r = call('Runtime.evaluate', { expression => $expr, returnByValue => $T, awaitPromise => $await ? $T : $F }, $session);
+    my($expr, $await, $timeout) = @_;
+    my $r = call('Runtime.evaluate', { expression => $expr, returnByValue => $T, awaitPromise => $await ? $T : $F }, $session, $timeout);
     die("javascript error: ".($r->{'exceptionDetails'}->{'text'} // '')."\n") if $r->{'exceptionDetails'};
     return $r->{'result'}->{'value'};
 }
@@ -732,7 +736,10 @@ EOJS
     my $deadline = time() + $wait_timeout;
     my $state = "";
     while(time() < $deadline) {
-        $state = _quiet(sub { _evaluate($check) }) // ""; # the page may be gone during a navigation
+        # a page busy with javascript does not answer, so the wait is bounded by what is left of WAIT_TIMEOUT
+        my $left = $deadline - time();
+        last if $left <= 0;
+        $state = _quiet(sub { _evaluate($check, 0, $left) }) // ""; # the page may be gone during a navigation
         last if $state;
         _pump(0.1);
     }
@@ -756,7 +763,7 @@ sub _write_pdf {
         call('Emulation.setEmulatedMedia', { media => 'screen' }, $session);
         %pdf = (%pdf, paperWidth => 1600/96, paperHeight => 1200/96);
     }
-    _quiet(sub { _evaluate('document.fonts.ready.then(function() { return true; })', 1) });
+    _quiet(sub { _evaluate('document.fonts.ready.then(function() { return true; })', 1, 10) });
     my $res = eval { call('Page.printToPDF', \%pdf, $session, $pdf_timeout) };
     if(!$res) {
         die($@) if ref $@;
@@ -769,12 +776,28 @@ sub _write_pdf {
     _debug("pdf stream opened");
     while(1) {
         my $chunk = call('IO.read', { handle => $res->{'stream'}, size => 1048576 }, $session, $pdf_timeout);
-        print $fh ($chunk->{'base64Encoded'} ? decode_base64($chunk->{'data'}) : $chunk->{'data'}) or _fail(1, "cannot write ".$file.": ".$!);
+        _write_data($fh, $file, $chunk->{'base64Encoded'} ? decode_base64($chunk->{'data'}) : $chunk->{'data'});
         last if $chunk->{'eof'};
     }
     close($fh) or _fail(1, "cannot write ".$file.": ".$!);
     $partial_output = undef;
     _quiet(sub { call('IO.close', { handle => $res->{'stream'} }, $session, 10) });
+    return;
+}
+
+###########################################################
+# unbuffered, so nothing is left to flush when the run ends by a signal
+sub _write_data {
+    my($fh, $file, $data) = @_;
+    my($off, $len) = (0, length($data));
+    while($off < $len) {
+        my $n = syswrite($fh, $data, $len - $off, $off);
+        if(!defined $n) {
+            next if $!{EINTR};
+            _fail(1, "cannot write ".$file.": ".$!);
+        }
+        $off += $n;
+    }
     return;
 }
 
@@ -790,7 +813,7 @@ sub _write_png {
     }
     open(my $fh, '>:raw', $file) or _fail(1, "cannot write ".$file.": ".$!);
     $partial_output = $file;
-    print $fh decode_base64($res->{'data'}) or _fail(1, "cannot write ".$file.": ".$!);
+    _write_data($fh, $file, decode_base64($res->{'data'}));
     close($fh) or _fail(1, "cannot write ".$file.": ".$!);
     $partial_output = undef;
     return;
@@ -856,7 +879,9 @@ sub selftest {
     my $deadline = time() + $load_timeout;
     my $found;
     while(time() < $deadline) {
-        $found = _quiet(sub { _evaluate('window.thruk_selftest === 1 && document.body.textContent.indexOf('.$json_text->encode($text).') >= 0') });
+        my $left = $deadline - time();
+        last if $left <= 0;
+        $found = _quiet(sub { _evaluate('window.thruk_selftest === 1 && document.body.textContent.indexOf('.$json_text->encode($text).') >= 0', 0, $left) });
         last if $found;
         _pump(0.1);
     }

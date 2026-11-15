@@ -229,6 +229,22 @@ for my $sig (qw/TERM INT HUP/) {
     _no_leftovers($r, "SIG$sig");
 }
 
+# signal while the pdf is written: the output is a fifo nobody reads from, so the renderer blocks in the middle of the transfer
+{
+    my $f = "$tmp/signal_fifo.pdf";
+    POSIX::mkfifo($f, 0600) or die("mkfifo failed: $!");
+    sysopen(my $fifo, $f, O_RDONLY|O_NONBLOCK) or die("cannot open fifo: $!");
+    my $h = _start(_renderer("$local/big", $f, 1600, 1200, ""));
+    ok(_wait_for(sub { scalar(_slurp($h->{'errfile'}) =~ m/pdf\ stream\ opened/mx) }, 30), "SIGTERM during pdf transfer: transfer started");
+    sleep(0.5);
+    kill('TERM', $h->{'pid'});
+    my $r = _finish($h, 20);
+    close($fifo);
+    is($r->{'rc'}, 1, "SIGTERM during pdf transfer: exit code 1");
+    ok(!-e $f, "SIGTERM during pdf transfer: partial output removed");
+    _no_leftovers($r, "SIGTERM during pdf transfer");
+}
+
 ###########################################################
 # no usable home, several runs at once
 {
@@ -289,6 +305,14 @@ for my $sig (qw/TERM INT HUP/) {
     ok($r->{'elapsed'} >= 3 && $r->{'elapsed'} < 12, "grafana without chart: stops after WAIT_TIMEOUT (".sprintf("%.1f", $r->{'elapsed'})."s)");
     ok(!-e $f, "grafana without chart: no output file");
     _no_leftovers($r, "grafana without chart");
+
+    # javascript keeps the page busy, the page does not answer at all
+    $r = _run(_renderer("$local/grafana/busy?a=1", $f, 800, 400, ""), WAIT_TIMEOUT => 3);
+    is($r->{'rc'}, 2, "grafana page busy with javascript: exit code 2");
+    is($r->{'out'}, "timeout while waiting for chart, export failed\n", "grafana page busy with javascript: message");
+    ok($r->{'elapsed'} >= 3 && $r->{'elapsed'} < 12, "grafana page busy with javascript: stops after WAIT_TIMEOUT (".sprintf("%.1f", $r->{'elapsed'})."s)");
+    ok(!-e $f, "grafana page busy with javascript: no output file");
+    _no_leftovers($r, "grafana page busy with javascript");
 
     $r = _run(_renderer("$local/grafana/login?a=1", $f, 800, 400, ""), WAIT_TIMEOUT => 3);
     is($r->{'rc'}, 2, "grafana login window: exit code 2");
