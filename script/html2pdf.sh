@@ -14,6 +14,12 @@
 DIR=$(dirname "$BASH_SOURCE")
 export PATH=$PATH:$DIR
 
+export THRUK_BROWSER THRUK_BROWSER_NO_SANDBOX WAIT_TIMEOUT START_TIMEOUT THRUK_COOKIE_AUTH_DOMAIN
+if [ "$1" = "--find-browser" ] || [ "$1" = "--selftest" ]; then
+    perl "$DIR/render_url.pl" "$1"
+    exit $?
+fi
+
 LOGFILE="$3";
 if [ "$LOGFILE" != "" ]; then
     exec >>$LOGFILE 2>&1
