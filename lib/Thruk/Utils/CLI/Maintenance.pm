@@ -169,10 +169,13 @@ sub cleanup_browser_folders {
     push @patterns, "/tmp/puppeteer_dev_chrome_profile-*", "/tmp/org.chromium.Chromium.*", "/tmp/puppeteer.cache.*", $tmp_path."/puppeteer.cache";
     my %seen;
     for my $olddir (grep { -e $_ && !$seen{$_}++ } map { glob($_) } @patterns) {
+        # /tmp is shared: only own folders, never symlinks
+        my @stat = lstat($olddir);
+        next if(-l _ || !-d _ || $stat[4] != $>);
         $total++;
-        my @stat = stat($olddir);
         if($stat[9] < $max_age) {
-            Thruk::Utils::IO::cmd("rm -rf $olddir");
+            # no shell, other users can choose these names
+            Thruk::Utils::IO::cmd(['rm', '-rf', '--', $olddir]);
             $removed++;
             if($verbose && -d $olddir.'/.') {
                 _warn("unable to remove browser folder: %s", $olddir);

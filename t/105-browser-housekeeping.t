@@ -39,12 +39,20 @@ my @new = (
     "/tmp/".$old_name."_dev_chrome_profile-".$id."new",
 );
 my @other = ("/tmp/thruk_other_".$id);
+# a name with a shell command, other users can create such folders in /tmp
+my $marker = "thruk_pwned_".$id;
+push @old, "/tmp/thruk_browser_".$id."x;touch ".$marker;
+# a symlink must not be followed, the folder it points to stays
+my $target  = "/tmp/thruk_target_".$id;
+my $link    = "/tmp/thruk_browser_".$id."link";
 END {
     for my $dir (@old, @new, @other) {
         next unless($dir && -d $dir);
         unlink($dir."/file");
         rmdir($dir);
     }
+    unlink($link, $marker);
+    if(-d $target) { unlink($target."/file"); rmdir($target); }
 }
 
 my $three_hours_ago = time() - 3*3600;
@@ -56,6 +64,11 @@ for my $dir (@old, @new, @other) {
 for my $dir (@old, @other) {
     utime($three_hours_ago, $three_hours_ago, $dir) or die("cannot change time of $dir: $!");
 }
+mkdir($target) or die("cannot create $target: $!");
+open(my $tfh, '>', $target."/file") or die("cannot write $target/file: $!");
+close($tfh);
+utime($three_hours_ago, $three_hours_ago, $target);
+symlink($target, $link) or die("cannot create $link: $!");
 
 my($total, $removed) = Thruk::Utils::CLI::Maintenance::cleanup_browser_folders($c, 1);
 ok($total   >= scalar(@old) + scalar(@new), "found at least the folders of this test (total: $total)");
@@ -69,5 +82,8 @@ for my $dir (@new) {
 for my $dir (@other) {
     ok(-d $dir, "other folder is kept: ".$dir);
 }
+ok(!-e $marker, "shell command in a folder name is not executed");
+ok(-l $link, "symlink is not removed: ".$link);
+ok(-f $target."/file", "folder behind a symlink is kept: ".$target);
 
 done_testing();
