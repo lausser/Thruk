@@ -33,9 +33,10 @@ print "output of the fake renderer\n";
 print STDERR "error output of the fake renderer\n";
 if($ENV{'FAKE_WRITE'}) {
     open(my $out, '>', $ARGV[1]) or die("cannot write output: $!");
-    print $out "new content";
+    print $out ($ENV{'FAKE_CONTENT'} // "new content");
     close($out);
 }
+sleep($ENV{'FAKE_SLEEP'}) if $ENV{'FAKE_SLEEP'};
 chmod(0555, dirname($ARGV[1])) if $ENV{'FAKE_LOCK_DIR'};
 exit($ENV{'FAKE_RC'} // 0);
 EOT
@@ -112,14 +113,18 @@ for my $wrapper ([$html2pdf, ['file:///in.html', "$tmp/out/rc.pdf"]], [$grafana,
     my $out = "$tmp/out/report.pdf";
     my $r = _wrapper([$html2pdf, 'file:///some where/in.html', $out, '', 1], FAKE_WRITE => 1, THRUK_SESSION_ID => 'sess1');
     is($r->{'rc'}, 0, "html2pdf.sh: exit code 0");
-    is_deeply($r->{'args'}, ['file:///some where/in.html', $out.'.pdf', 1600, 1200, 'sess1', 1], "html2pdf.sh: arguments of the renderer");
+    my $stage = $r->{'args'}->[1] // '';
+    like($stage, qr/^\Q$out\E\.\d+\.pdf$/mx, "html2pdf.sh: renderer writes to a staging file of this call");
+    is_deeply([@{$r->{'args'}}[0,2..5]], ['file:///some where/in.html', 1600, 1200, 'sess1', 1], "html2pdf.sh: arguments of the renderer");
     is(_slurp($out), "new content", "html2pdf.sh: output is at the target");
-    ok(!-e $out.".pdf", "html2pdf.sh: staging file is gone");
+    ok(!-e $stage, "html2pdf.sh: staging file is gone");
+    is(_staging($out), 0, "html2pdf.sh: no staging file left");
     like($r->{'out'}, qr/^output\ of\ the\ fake\ renderer$/mx, "html2pdf.sh: output of the renderer is printed");
     like($r->{'out'}, qr/^error\ output\ of\ the\ fake\ renderer$/mx, "html2pdf.sh: error output of the renderer is printed");
 
     $r = _wrapper([$html2pdf, 'http://localhost/thruk/', $out], FAKE_WRITE => 1);
-    is_deeply($r->{'args'}, ['http://localhost/thruk/', $out.'.pdf', 1600, 1200, ''], "html2pdf.sh: arguments without session and report flag");
+    is_deeply([@{$r->{'args'}}[0,2..4]], ['http://localhost/thruk/', 1600, 1200, ''], "html2pdf.sh: arguments without session and report flag");
+    is(scalar @{$r->{'args'}}, 5, "html2pdf.sh: no report flag passed");
 
     # with logfile nothing is printed
     my $log = "$tmp/out/report.log";
@@ -132,22 +137,42 @@ for my $wrapper ([$html2pdf, ['file:///in.html', "$tmp/out/rc.pdf"]], [$grafana,
 
     # failed run: exit code is passed on, target stays as it was, nothing stale is published
     _write($out, "old content");
-    _write($out.".pdf", "stale staging file");
+    _write($out.".pdf", "stale staging file of an older version");
     $r = _wrapper([$html2pdf, 'file:///in.html', $out], FAKE_RC => 2);
     is($r->{'rc'}, 2, "html2pdf.sh failed run: exit code of the renderer");
     is(_slurp($out), "old content", "html2pdf.sh failed run: existing target is untouched");
-    ok(!-e $out.".pdf", "html2pdf.sh failed run: stale staging file is removed");
 
     unlink($out);
-    _write($out.".pdf", "stale staging file");
     $r = _wrapper([$html2pdf, 'file:///in.html', $out], FAKE_RC => 2);
     ok(!-e $out, "html2pdf.sh failed run: stale staging file is not published");
+    unlink($out.".pdf");
 
     # a failed run which left a file behind
     $r = _wrapper([$html2pdf, 'file:///in.html', $out], FAKE_RC => 2, FAKE_WRITE => 1);
     is($r->{'rc'}, 2, "html2pdf.sh failed run with output: exit code of the renderer");
     ok(!-e $out, "html2pdf.sh failed run with output: nothing is published");
-    ok(!-e $out.".pdf", "html2pdf.sh failed run with output: staging file is removed");
+    is(_staging($out), 0, "html2pdf.sh failed run with output: staging file is removed");
+
+    # two calls for the same target at the same time: the first one succeeds while the second
+    # one is still writing and fails later. Only the output of the first call may be published.
+    unlink($out);
+    my $first  = _start_wrapper([$html2pdf, 'file:///in.html', $out], FAKE_WRITE => 1, FAKE_CONTENT => "first", FAKE_SLEEP => 2, FAKE_RECORD => "$tmp/record1");
+    sleep(1);
+    my $second = _start_wrapper([$html2pdf, 'file:///in.html', $out], FAKE_WRITE => 1, FAKE_CONTENT => "second, incomplete", FAKE_SLEEP => 3, FAKE_RC => 2, FAKE_RECORD => "$tmp/record2");
+    is(_wait_wrapper($first), 0, "html2pdf.sh parallel calls: first call succeeds");
+    is(_wait_wrapper($second), 2, "html2pdf.sh parallel calls: second call fails");
+    is(_slurp($out), "first", "html2pdf.sh parallel calls: output of the successful call is published");
+    is(_staging($out), 0, "html2pdf.sh parallel calls: no staging file left");
+
+    # the wrapper and the renderer get a signal while the renderer runs
+    unlink($out);
+    my $h = _start_wrapper([$html2pdf, 'file:///in.html', $out], FAKE_WRITE => 1, FAKE_SLEEP => 10);
+    sleep(1);
+    is(_staging($out), 1, "html2pdf.sh killed: staging file exists while the renderer runs");
+    kill('TERM', -$h);
+    _wait_wrapper($h);
+    ok(!-e $out, "html2pdf.sh killed: nothing is published");
+    is(_staging($out), 0, "html2pdf.sh killed: staging file is removed");
 
     $r = _wrapper([$html2pdf, 'file:///in.html', $out], FAKE_RC => 1);
     is($r->{'rc'}, 1, "html2pdf.sh: exit code 1 of the renderer is passed on");
@@ -178,21 +203,28 @@ for my $wrapper ([$html2pdf, ['file:///in.html', "$tmp/out/rc.pdf"]], [$grafana,
     my $url = 'http://localhost/demo/grafana/dashboard-solo/script/histou.js?host=a b&panelId=1';
     my $r = _wrapper([$grafana, 800, 300, 1700000000, 1700003600, $url, $out], FAKE_WRITE => 1, THRUK_SESSION_ID => 'sess2');
     is($r->{'rc'}, 0, "grafana_export.sh: exit code 0");
-    is_deeply($r->{'args'}, [$url.'&from=1700000000000&to=1700003600000', $out.'.png', 800, 300, 'sess2'], "grafana_export.sh: arguments of the renderer, time range in milliseconds");
+    like($r->{'args'}->[1] // '', qr/^\Q$out\E\.\d+\.png$/mx, "grafana_export.sh: renderer writes to a staging file of this call");
+    is_deeply([@{$r->{'args'}}[0,2..4]], [$url.'&from=1700000000000&to=1700003600000', 800, 300, 'sess2'], "grafana_export.sh: arguments of the renderer, time range in milliseconds");
     is(_slurp($out), "new content", "grafana_export.sh: output is at the target");
-    ok(!-e $out.".png", "grafana_export.sh: staging file is gone");
+    is(_staging($out, 'png'), 0, "grafana_export.sh: staging file is gone");
     like($r->{'out'}, qr/^output\ of\ the\ fake\ renderer$/mx, "grafana_export.sh: output of the renderer is printed");
 
     _write($out, "old content");
-    _write($out.".png", "stale staging file");
     $r = _wrapper([$grafana, 800, 300, 1, 2, $url, $out], FAKE_RC => 2);
     is($r->{'rc'}, 2, "grafana_export.sh failed run: exit code of the renderer");
     is(_slurp($out), "old content", "grafana_export.sh failed run: existing target is untouched");
-    ok(!-e $out.".png", "grafana_export.sh failed run: stale staging file is removed");
 
     unlink($out);
     $r = _wrapper([$grafana, 800, 300, 1, 2, $url, $out], FAKE_RC => 2, FAKE_WRITE => 1);
     ok(!-e $out, "grafana_export.sh failed run with output: nothing is published");
+    is(_staging($out, 'png'), 0, "grafana_export.sh failed run with output: staging file is removed");
+
+    my $h = _start_wrapper([$grafana, 800, 300, 1, 2, $url, $out], FAKE_WRITE => 1, FAKE_SLEEP => 10);
+    sleep(1);
+    kill('TERM', -$h);
+    _wait_wrapper($h);
+    ok(!-e $out, "grafana_export.sh killed: nothing is published");
+    is(_staging($out, 'png'), 0, "grafana_export.sh killed: staging file is removed");
 
     $r = _wrapper([$grafana, 800, 300, 1, 2, $url, "$tmp/out/dir"], FAKE_WRITE => 1);
     is($r->{'rc'}, 1, "grafana_export.sh directory as target: exit code 1");
@@ -209,3 +241,36 @@ for my $wrapper ([$html2pdf, ['file:///in.html', "$tmp/out/rc.pdf"]], [$grafana,
 }
 
 done_testing();
+
+###########################################################
+# number of staging files of the given output file
+sub _staging {
+    my($out, $ext) = @_;
+    my @files = glob($out.".*.".($ext // 'pdf'));
+    return(scalar @files);
+}
+
+###########################################################
+# starts a wrapper in its own process group, returns its pid
+sub _start_wrapper {
+    my($args, %env) = @_;
+    my $pid = fork();
+    die("fork failed: $!") unless defined $pid;
+    if(!$pid) {
+        setpgrp(0, 0);
+        %ENV = (PATH => $ENV{'PATH'}, HOME => "$tmp/home", FAKE_RECORD => "$tmp/record_bg", %env);
+        open(STDIN,  '<', '/dev/null');
+        open(STDOUT, '>', '/dev/null');
+        open(STDERR, '>', '/dev/null');
+        { exec("/bin/bash", @{$args}); }
+        exit(127);
+    }
+    return $pid;
+}
+
+###########################################################
+sub _wait_wrapper {
+    my($pid) = @_;
+    waitpid($pid, 0);
+    return($? >> 8);
+}

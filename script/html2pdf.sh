@@ -35,12 +35,14 @@ if [ -d "$OUTPUT" ]; then
     exit 1
 fi
 
-# the output is only put in place after the renderer succeeded
-rm -f "${OUTPUT}.pdf"
-perl "$DIR/render_url.pl" "$INPUT" "${OUTPUT}.pdf" "1600" "1200" "$THRUK_SESSION_ID" $IS_REPORT 2>&1
+# the output is only put in place after the renderer succeeded.
+# Each call has its own staging file, so parallel calls cannot publish each other's output.
+STAGE="${OUTPUT}.$$.pdf"
+trap 'rm -f "$STAGE"' EXIT
+rm -f "$STAGE"
+perl "$DIR/render_url.pl" "$INPUT" "$STAGE" "1600" "1200" "$THRUK_SESSION_ID" $IS_REPORT 2>&1
 rc=$?
 if [ $rc -eq 0 ]; then
-    mv "${OUTPUT}.pdf" "${OUTPUT}" || rc=1
+    mv "$STAGE" "${OUTPUT}" || rc=1
 fi
-rm -f "${OUTPUT}.pdf"
 exit $rc

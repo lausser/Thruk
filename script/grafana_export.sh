@@ -30,12 +30,14 @@ if [ -d "$TEMPFILE" ]; then
     exit 1
 fi
 
-# the output is only put in place after the renderer succeeded
-rm -f "${TEMPFILE}.png"
-perl "$DIR/render_url.pl" "$INPUT" "${TEMPFILE}.png" "$WIDTH" "$HEIGHT" "$THRUK_SESSION_ID" 2>&1
+# the output is only put in place after the renderer succeeded.
+# Each call has its own staging file, so parallel calls cannot publish each other's output.
+STAGE="${TEMPFILE}.$$.png"
+trap 'rm -f "$STAGE"' EXIT
+rm -f "$STAGE"
+perl "$DIR/render_url.pl" "$INPUT" "$STAGE" "$WIDTH" "$HEIGHT" "$THRUK_SESSION_ID" 2>&1
 rc=$?
 if [ $rc -eq 0 ]; then
-    mv "${TEMPFILE}.png" "${TEMPFILE}" || rc=1
+    mv "$STAGE" "${TEMPFILE}" || rc=1
 fi
-rm -f "${TEMPFILE}.png"
 exit $rc
