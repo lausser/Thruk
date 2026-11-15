@@ -39,13 +39,15 @@ use strict;
 use Errno ();
 use File::Basename qw/dirname/;
 use File::Temp qw/tempdir/;
+use IO::Handle ();
 use MIME::Base64 qw/decode_base64/;
 use POSIX ();
 use Time::HiRes qw/time sleep/;
 
-my $json_class = eval { require Cpanel::JSON::XS; 1 } ? 'Cpanel::JSON::XS' : do { require JSON::PP; 'JSON::PP' };
-my $json       = $json_class->new->utf8;                 # protocol messages
-my $json_text  = $json_class->new->ascii->allow_nonref;  # javascript literals and page content
+# Cpanel::JSON::XS is not in the perl path of the wrappers on all installations, JSON::PP is in the perl core
+my $has_xs     = eval { require Cpanel::JSON::XS; 1 } ? 1 : do { require JSON::PP; 0 };
+my $json       = _new_json()->utf8;                 # protocol messages
+my $json_text  = _new_json()->ascii->allow_nonref;  # javascript literals and page content
 my($T, $F)     = (\1, \0);
 
 my $load_timeout = 30;   # seconds to wait for a page to load
@@ -59,26 +61,30 @@ my($msgid, $buf, $scanned) = (0, "", 0);
 my(%want, %replies);     # commands waiting for a reply and replies not fetched yet
 # page state
 my($session, $main_target, $main_frame) = ('', '', '');
-my %main;                # state of the current navigation of the main frame
+my %nav;                 # state of the current navigation of the main frame
 my($cookie_host, $cookie_url);
 my $partial_output;      # output file which has been started but is not complete
 my $active;              # set as soon as main() runs
 
+## no critic
 END { if($active) { my $rc = $?; cleanup(); $? = $rc; } }
+## use critic
 
 main() unless caller;
 
 ###########################################################
 sub main {
     $active = 1;
-    $| = 1;
     binmode(STDOUT, ':encoding(UTF-8)');
     binmode(STDERR, ':encoding(UTF-8)');
-    select((select(STDERR), $| = 1)[0]);
+    STDOUT->autoflush(1);
+    STDERR->autoflush(1);
+    ## no critic
     $SIG{'PIPE'} = 'IGNORE';
     for my $sig (qw/TERM INT HUP/) {
         $SIG{$sig} = sub { cleanup(); exit 1; };
     }
+    ## use critic
 
     my $mode = $ARGV[0] // '';
     if($mode eq '--find-browser') {
@@ -146,6 +152,11 @@ sub main {
     unlink($partial_output) if defined $partial_output;
     cleanup();
     exit($selftest ? 1 : $rc);
+}
+
+###########################################################
+sub _new_json {
+    return($has_xs ? Cpanel::JSON::XS->new : JSON::PP->new);
 }
 
 ###########################################################
@@ -249,7 +260,11 @@ sub start_browser {
     die("fork: ".$!."\n") unless defined $pid;
     if(!$pid) {
         # the browser reads commands from fd 3 and writes to fd 4
+        ## no critic
         $SIG{$_} = 'DEFAULT' for qw/TERM INT HUP PIPE/;
+        $ENV{'XDG_CONFIG_HOME'} = $run_dir;  # works without writable home
+        $ENV{'XDG_CACHE_HOME'}  = $run_dir;
+        ## use critic
         POSIX::setpgid(0, 0);
         close($p_wr); close($p_rd);
         my($rd, $wr) = (fileno($c_rd), fileno($c_wr));
@@ -260,8 +275,6 @@ sub start_browser {
         open(STDIN,  '<', '/dev/null');
         open(STDOUT, '>', $run_dir."/stdout.log");
         open(STDERR, '>', $run_dir."/stderr.log");
-        $ENV{'XDG_CONFIG_HOME'} = $run_dir;  # works without writable home
-        $ENV{'XDG_CACHE_HOME'}  = $run_dir;
         my @args = (
             '--headless', '--remote-debugging-pipe', '--user-data-dir='.$run_dir.'/data', '--window-size='.$width.','.$height,
             '--disable-gpu', '--ignore-certificate-errors', '--hide-scrollbars', '--mute-audio',
@@ -510,12 +523,12 @@ sub _on_event {
         if($r->{'status'} >= 500 && $r->{'status'} <= 520) {
             _fail(2, "url ".$r->{'url'}." failed with status: ".$r->{'status'}.". Aborting...");
         }
-        if(($p->{'type'} || '') eq 'Document' && ($e->{'sessionId'} // '') eq $session && ($p->{'frameId'} // '') eq ($main{'frame'} || '')) {
-            $main{'docs'}->{$p->{'loaderId'}} = [$r->{'status'}, $r->{'statusText'} // ''];
+        if(($p->{'type'} || '') eq 'Document' && ($e->{'sessionId'} // '') eq $session && ($p->{'frameId'} // '') eq ($nav{'frame'} || '')) {
+            $nav{'docs'}->{$p->{'loaderId'}} = [$r->{'status'}, $r->{'statusText'} // ''];
         }
     }
     elsif($m eq 'Page.loadEventFired') {
-        $main{'loaded'} = 1 if(($e->{'sessionId'} // '') eq $session);
+        $nav{'loaded'} = 1 if(($e->{'sessionId'} // '') eq $session);
     }
     elsif($m eq 'Fetch.requestPaused') {
         # a document of any frame is about to load from another host than the one
@@ -604,18 +617,18 @@ sub _set_cookie {
 # navigate and wait for the load event, returns (status, statusText) of the page
 sub _goto_url {
     my($target) = @_;
-    %main = (frame => $main_frame);
+    %nav = (frame => $main_frame);
     my $id       = _send('Page.navigate', { url => $target }, $session);
     my $deadline = time() + $load_timeout;
     my $nav;
-    while(!$nav || !$main{'loaded'}) {
+    while(!$nav || !$nav{'loaded'}) {
         if(!$nav && exists $replies{$id}) {
             my $reply = delete $replies{$id};
             delete $want{$id};
             _fail(2, "fetching url ".$target." failed: ".($reply->{'error'}->{'message'} // '')) if $reply->{'error'};
             $nav = $reply->{'result'} || {};
             _fail(2, "fetching url ".$target." failed: ".$nav->{'errorText'}) if $nav->{'errorText'};
-            $main{'loader'} = $nav->{'loaderId'};
+            $nav{'loader'} = $nav->{'loaderId'};
             next;
         }
         my $msg = eval { _read_msg($deadline) };
@@ -625,7 +638,7 @@ sub _goto_url {
         }
         _dispatch($msg);
     }
-    my $doc = $main{'docs'}->{$main{'loader'} || ''} || [0, ''];
+    my $doc = $nav{'docs'}->{$nav{'loader'} || ''} || [0, ''];
     return(@{$doc});
 }
 
