@@ -38,7 +38,6 @@ use warnings;
 use strict;
 use Errno ();
 use File::Basename qw/dirname/;
-use File::Path qw/remove_tree/;
 use File::Temp qw/tempdir/;
 use MIME::Base64 qw/decode_base64/;
 use POSIX ();
@@ -321,7 +320,27 @@ sub cleanup {
     }
     my $dir = $run_dir;
     $run_dir = undef;
-    remove_tree($dir) if($dir && -d $dir);
+    _remove_folder($dir) if($dir && -d $dir);
+    return;
+}
+
+###########################################################
+# does not change the working directory, which might not be accessible for this user
+sub _remove_folder {
+    my($dir) = @_;
+    if(opendir(my $dh, $dir)) {
+        for my $entry (readdir($dh)) {
+            next if($entry eq '.' || $entry eq '..');
+            my $path = $dir.'/'.$entry;
+            if(!-l $path && -d $path) {
+                _remove_folder($path);
+            } else {
+                unlink($path);
+            }
+        }
+        closedir($dh);
+    }
+    rmdir($dir);
     return;
 }
 

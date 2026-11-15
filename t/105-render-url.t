@@ -50,7 +50,7 @@ if(!$srvpid) {
     open(STDIN,  '<', '/dev/null');
     open(STDOUT, '>', "$tmp/server.log");
     open(STDERR, '>&', \*STDOUT);
-    exec($^X, $server, $port, $reqlog);
+    { exec($^X, $server, $port, $reqlog); }
     POSIX::_exit(127);
 }
 POSIX::setpgid($srvpid, $srvpid);
@@ -237,6 +237,18 @@ for my $sig (qw/TERM INT HUP/) {
     is($r->{'rc'}, 0, "HOME=/nonexistent: exit code 0") or diag($r->{'out'}.$r->{'err'});
     like(_slurp($f), qr/^%PDF/mx, "HOME=/nonexistent: output is a pdf");
     _no_leftovers($r, "HOME=/nonexistent");
+
+    # the working directory cannot be read, ex.: the home of another user
+    SKIP: {
+        skip("root can read every folder", 5) if $> == 0;
+        $f = "$tmp/nocwd.pdf";
+        mkdir("$tmp/nocwd");
+        $r = _run(_renderer("$local/plain", $f, 1600, 1200, ""), THRUK_TEST_CWD => "$tmp/nocwd");
+        chmod(0755, "$tmp/nocwd");
+        is($r->{'rc'}, 0, "working directory not accessible: exit code 0") or diag($r->{'out'}.$r->{'err'});
+        is($r->{'out'}.(join("", grep { !m/^\[debug\]/mx } split(/^/mx, $r->{'err'}))), "", "working directory not accessible: no output");
+        _no_leftovers($r, "working directory not accessible");
+    }
 
     my @h = map { _start(_renderer("$local/c/page", "$tmp/multi$_.pdf", 1600, 1200, "")) } (1..3);
     for my $n (1..3) {
@@ -474,10 +486,14 @@ sub _start {
     die("fork failed: $!") unless defined $pid;
     if(!$pid) {
         %ENV = (%ENV, THRUK_RENDER_DEBUG => 1, THRUK_TEST_PIDFILE => $h->{'pidfile'}, %env);
+        if(my $cwd = delete $ENV{'THRUK_TEST_CWD'}) {
+            chdir($cwd) or die("cannot chdir to $cwd: $!");
+            chmod(0000, $cwd); # the working directory of the renderer is not accessible now
+        }
         open(STDIN,  '<', '/dev/null');
         open(STDOUT, '>', $h->{'outfile'});
         open(STDERR, '>', $h->{'errfile'});
-        exec(@{$cmd});
+        { exec(@{$cmd}); }
         POSIX::_exit(127);
     }
     $h->{'pid'} = $pid;
