@@ -483,9 +483,7 @@ exit 0
 %attr(0755,root,root) %{_datadir}/thruk/script/grafana_export.sh
 %attr(0755,root,root) %{_datadir}/thruk/script/html2pdf.sh
 %attr(0644,root,root) %{_datadir}/thruk/script/render_url.pl
-%attr(0644,root,root) %{_datadir}/thruk/script/puppeteer.cjs
 %attr(0755,root,root) %{_datadir}/thruk/script/install_browser.sh
-%attr(0755,root,root) %{_datadir}/thruk/script/install_puppeteer.sh
 %attr(0755,root,root) %{_datadir}/thruk/script/pnp_export.sh
 %attr(0755,root,root) %{_datadir}/thruk/script/convert_old_datafile
 %attr(0755,root,root) %{_datadir}/thruk/script/check_thruk_rest

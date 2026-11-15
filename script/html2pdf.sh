@@ -30,35 +30,17 @@ OUTPUT=$2
 IS_REPORT=$4
 
 
-NODE="node"
-if [ -n "$OMD_ROOT" ]; then
-    if [ -d "$OMD_ROOT/node_modules/" ]; then
-        export NODE_PATH=$OMD_ROOT/node_modules/
-    elif [ -d "$OMD_ROOT/lib/node_modules/" ]; then
-        export NODE_PATH=$OMD_ROOT/lib/node_modules/
-    fi
-    export XDG_CONFIG_HOME=$OMD_ROOT/tmp/thruk/puppeteer.cache
-    export XDG_CACHE_HOME=$XDG_CACHE_HOME
-else
-    export XDG_CONFIG_HOME=/tmp/puppeteer.cache.$(id -u)
-    export XDG_CACHE_HOME=$XDG_CACHE_HOME
-fi
-if [ -z "$NODE_PATH" ] && [ -d "/var/lib/thruk/puppeteer/node_modules" ]; then
-    export NODE_PATH="/var/lib/thruk/puppeteer/node_modules"
-    if [ -z "$PUPPETEER_EXECUTABLE_PATH" ]; then
-        export PUPPETEER_EXECUTABLE_PATH=$(ls -1 /var/lib/thruk/puppeteer/chromium/chrome/*/chrome*/chrome 2>/dev/null | head -n 1)
-    fi
-    if [ -z "$PUPPETEER_EXECUTABLE_PATH" -a -x /usr/bin/chromium ]; then
-        export PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-    fi
-    if [ -d "/var/lib/thruk/puppeteer/node" ]; then
-        NODE="/var/lib/thruk/puppeteer/node/bin/node"
-    fi
+if [ -d "$OUTPUT" ]; then
+    echo "ERROR: $OUTPUT is a directory"
+    exit 1
 fi
 
-$NODE $DIR/puppeteer.cjs "$INPUT" "${OUTPUT}.pdf" "1600" "1200" "$THRUK_SESSION_ID" $IS_REPORT 2>&1
+# the output is only put in place after the renderer succeeded
+rm -f "${OUTPUT}.pdf"
+perl "$DIR/render_url.pl" "$INPUT" "${OUTPUT}.pdf" "1600" "1200" "$THRUK_SESSION_ID" $IS_REPORT 2>&1
 rc=$?
-if [ -e "${OUTPUT}.pdf" ]; then
-    mv "${OUTPUT}.pdf" "${OUTPUT}"
+if [ $rc -eq 0 ]; then
+    mv "${OUTPUT}.pdf" "${OUTPUT}" || rc=1
 fi
+rm -f "${OUTPUT}.pdf"
 exit $rc

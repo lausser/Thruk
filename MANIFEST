@@ -2288,7 +2288,6 @@ script/generate_timeperiod_transitions.pl
 script/grafana_export.sh
 script/html2pdf.sh
 script/install_browser.sh
-script/install_puppeteer.sh
 script/Makefile.thruk
 script/maybe_offline
 script/nagexp
@@ -2296,7 +2295,6 @@ script/nagimp
 script/naglint
 script/pnp_export.sh
 script/print_post_variables.sh
-script/puppeteer.cjs
 script/reenable_actions
 script/render_url.pl
 script/templates_cleanup.pl
@@ -2430,9 +2428,12 @@ t/101-backend_postgresql.t
 t/101-cli-thruk.t
 t/103-thruk_utils_io.t
 t/104-thruk_utils_cache.t
+t/105-browser-housekeeping.t
 t/105-install-browser.t
 t/105-render-lookup.t
 t/105-render-url.t
+t/105-render-wrapper.t
+t/105-reports-browser-warning.t
 t/105-thruk-utils-ssi.t
 t/106-thruk_context.t
 t/107-thruk_utils_avail.t

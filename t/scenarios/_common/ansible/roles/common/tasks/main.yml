@@ -65,7 +65,7 @@
     line: "  check_command                  check_local_disk!0.02%!0.01%!/"
     regexp: '^.*check_command.*check_local_disk!.*!.*!/'
 
-- name: make puppeteer wait longer on busy machines
+- name: wait longer for grafana charts on busy machines
   lineinfile:
     dest: /opt/omd/sites/{{ site }}/.thruk
     line: "WAIT_TIMEOUT=120"
@@ -75,7 +75,7 @@
     mode: "0644"
     create: true
 
-- name: make puppeteer wait longer on busy machines
+- name: wait longer for the browser start on busy machines
   lineinfile:
     dest: /opt/omd/sites/{{ site }}/.thruk
     line: "START_TIMEOUT=120"
