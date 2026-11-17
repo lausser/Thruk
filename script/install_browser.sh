@@ -119,7 +119,7 @@ if [ -n "$MISSING" ]; then
         if apt-cache show libasound2t64 >/dev/null 2>&1; then
             ASOUND=libasound2t64
         fi
-        echo "  apt-get install libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxkbcommon0 libxrandr2 libpango-1.0-0 $ASOUND"
+        echo "  apt-get install libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libgbm1 libnspr4 libnss3 libxcomposite1 libxdamage1 libxfixes3 libxkbcommon0 libxrandr2 libpango-1.0-0 $ASOUND"
     else
         echo "  the package manager of your distribution"
     fi
