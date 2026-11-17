@@ -69,11 +69,6 @@ zip(\$fake_browser => $zipfile, Name => 'chrome-headless-shell-linux64/chrome-he
     or die("zip failed: $ZipError");
 
 my $default_version = '147.0.7727.117';
-if(open(my $fh, '<', '/etc/redhat-release')) {
-    my $release = <$fh> // '';
-    close($fh);
-    $default_version = '121.0.6100.0' if $release =~ m/release\ 7/mx;
-}
 my $system_browser = "$tmp/system-chromium";
 _script($system_browser, 'echo fake system browser');
 

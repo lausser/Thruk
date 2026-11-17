@@ -13,11 +13,6 @@
 # chrome-headless-shell version this thruk release has been tested with
 BROWSER_VERSION=147.0.7727.117
 
-# the last version which runs on rhel 7 / centos 7
-if grep -q 'release 7' /etc/redhat-release 2>/dev/null; then
-    BROWSER_VERSION=121.0.6100.0
-fi
-
 ###########################################################
 DIR=$(cd "$(dirname "$BASH_SOURCE")" && pwd)
 DEFAULT_DEST=/var/lib/thruk/browser
