@@ -6,8 +6,8 @@
 #
 # writes one line per request to <logfile>: "<host header>\t<path>\t<cookie header>"
 #
-use strict;
 use warnings;
+use strict;
 use IO::Socket::IP;
 use MIME::Base64 qw(decode_base64);
 

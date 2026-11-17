@@ -19,6 +19,8 @@ my @settings = qw/THRUK_BROWSER THRUK_BROWSER_NO_SANDBOX WAIT_TIMEOUT START_TIME
 my $record   = "$tmp/record";
 {
     open(my $fh, '>', "$tmp/script/render_url.pl") or die("cannot write fake renderer: $!");
+    # These imports belong to the generated renderer, not this test.
+    ## no lint
     print $fh <<'EOT';
 use warnings;
 use strict;
@@ -40,6 +42,7 @@ sleep($ENV{'FAKE_SLEEP'}) if $ENV{'FAKE_SLEEP'};
 chmod(0555, dirname($ARGV[1])) if $ENV{'FAKE_LOCK_DIR'};
 exit($ENV{'FAKE_RC'} // 0);
 EOT
+    ## use lint
     close($fh);
 }
 

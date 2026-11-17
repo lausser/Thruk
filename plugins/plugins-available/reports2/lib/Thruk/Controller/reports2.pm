@@ -8,7 +8,6 @@ use Thruk::Action::AddDefaults ();
 use Thruk::Request ();
 use Thruk::Utils::Auth ();
 use Thruk::Utils::External ();
-use Thruk::Utils::IO ();
 use Thruk::Utils::Log qw/:all/;
 
 =head1 NAME

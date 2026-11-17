@@ -25,6 +25,7 @@ TestUtils::test_command({
 });
 
 use lib 'share/thruk/lib/';
+
 my $c = TestUtils->get_c();
 $c->authenticate('username' => 'omdadmin', 'auth_src' => 'test');
 require Thruk::Utils;

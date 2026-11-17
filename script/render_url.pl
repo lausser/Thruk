@@ -36,10 +36,10 @@ See https://www.thruk.org/documentation/faq.html#chromium for details.
 
 use warnings;
 use strict;
-use Errno ();
+use Errno;
 use File::Basename qw/dirname/;
 use File::Temp qw/tempdir/;
-use IO::Handle ();
+use IO::Handle;
 use MIME::Base64 qw/decode_base64/;
 use POSIX ();
 use Time::HiRes qw/time sleep/;
