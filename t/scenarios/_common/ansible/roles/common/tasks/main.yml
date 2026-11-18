@@ -139,7 +139,11 @@
     - 'export HISTFILE=/var/tmp/.bash_history.$UID'
 
 # an omd without THRUK_BROWSER (omd-labs nightly before the renderer change) has no browser
-# the renderer looks for; install one into /var/lib/thruk/browser, a site THRUK_BROWSER wins
+# the renderer looks for; install one into /var/lib/thruk/browser, a site THRUK_BROWSER wins.
+# The role also runs while the base image is built, /thruk is mounted only in the scenario container.
+- stat: path=/thruk/script/install_browser.sh
+  register: install_browser_script
+
 - name: "check THRUK_BROWSER of the site"
   shell: "sudo su - {{ site }} -c 'echo $THRUK_BROWSER'"
   register: site_thruk_browser
@@ -179,10 +183,14 @@
       - libxrandr2
       - libpango-1.0-0
       - unzip
-  when: site_thruk_browser.stdout == ""
+  when:
+    - install_browser_script.stat.exists
+    - site_thruk_browser.stdout == ""
 
 - name: "install a browser for rendering"
   shell: "/thruk/script/install_browser.sh"
   args:
     creates: /var/lib/thruk/browser/chrome-headless-shell/chrome-headless-shell
-  when: site_thruk_browser.stdout == ""
+  when:
+    - install_browser_script.stat.exists
+    - site_thruk_browser.stdout == ""
