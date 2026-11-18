@@ -34,11 +34,13 @@ ok($sessionid, "got session id");
 
 ###########################################################
 # pdf from a thruk url with session, http and https with the untrusted site certificate
+# without user namespaces (ex.: el7) the renderer says once per run that it retried without sandbox
+my $no_sandbox_note = '(browser did not start with sandbox .*, sandbox is off for this run\n)?';
 for my $base ('http://127.0.0.1/demo', 'https://127.0.0.1/demo') {
     unlink('tmp/tac.pdf');
     TestUtils::test_command({
         cmd  => '/thruk/script/html2pdf.sh "'.$base.'/thruk/cgi-bin/tac.cgi" tmp/tac.pdf',
-        like => ['/^$/'],
+        like => ['/^'.$no_sandbox_note.'$/'],
         env  => { 'THRUK_SESSION_ID' => $sessionid },
     });
     TestUtils::test_command({
@@ -67,7 +69,8 @@ for my $panel ('1', 'pl') {
     });
     TestUtils::test_command({
         cmd  => '/usr/bin/env file tmp/panel.png',
-        like => ['/PNG image data, 800 x 400, 8-bit\/color RGB, non-interlaced/'],
+        # older chrome (121 on el7) writes an alpha channel
+        like => ['/PNG image data, 800 x 400, 8-bit\/color RGBA?, non-interlaced/'],
     });
 }
 
