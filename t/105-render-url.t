@@ -32,10 +32,22 @@ if($find_rc != 0) {
     plan skip_all => 'no browser found, renderer cannot be tested: '.$real_browser;
 }
 diag("using browser ".$real_browser);
+# where the browser cannot start with sandbox (root, no user namespaces, ubuntu apparmor), the
+# renderer says so on every run. The wrapper then starts it without sandbox, so the output of the
+# other tests stays the same; the retry itself is tested with its own wrapper below.
+my $wrapper_args = '';
+{
+    local $ENV{'THRUK_BROWSER'} = $real_browser;
+    my(undef, $probe) = _cmd($^X, $renderer, '--selftest');
+    if($probe =~ m/did\ not\ start\ with\ sandbox/mx) {
+        diag("browser does not start with sandbox here, test wrapper adds --no-sandbox");
+        $wrapper_args = '--no-sandbox ';
+    }
+}
 my $has_pdftotext = scalar grep { -x $_."/pdftotext" } split(/:/mx, $ENV{'PATH'} // '');
 
 # the browser is started by wrappers which record the pid and map *.example.test to this host
-_script("$tmp/br.sh",        'echo $$ > "$THRUK_TEST_PIDFILE"', 'exec "'.$real_browser.'" $THRUK_TEST_BROWSER_ARGS --host-resolver-rules="MAP *.example.test 127.0.0.1" "$@"');
+_script("$tmp/br.sh",        'echo $$ > "$THRUK_TEST_PIDFILE"', 'exec "'.$real_browser.'" '.$wrapper_args.'$THRUK_TEST_BROWSER_ARGS --host-resolver-rules="MAP *.example.test 127.0.0.1" "$@"');
 _script("$tmp/br_hang.sh",   'echo $$ > "$THRUK_TEST_PIDFILE"', 'exec sleep 300');
 _script("$tmp/br_nosbx.sh",  'echo $$ > "$THRUK_TEST_PIDFILE"', 'case " $* " in *" --no-sandbox "*) ;; *) echo "FATAL: this test browser only starts without sandbox" >&2; exit 1;; esac', 'exec "'.$real_browser.'" "$@"');
 $ENV{'THRUK_BROWSER'} = "$tmp/br.sh";
