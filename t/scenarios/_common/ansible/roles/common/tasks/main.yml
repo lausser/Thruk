@@ -137,3 +137,52 @@
     - 'shopt -s histappend'
     - 'PROMPT_COMMAND="history -a"'
     - 'export HISTFILE=/var/tmp/.bash_history.$UID'
+
+# an omd without THRUK_BROWSER (omd-labs nightly before the renderer change) has no browser
+# the renderer looks for; install one into /var/lib/thruk/browser, a site THRUK_BROWSER wins
+- name: "check THRUK_BROWSER of the site"
+  shell: "sudo su - {{ site }} -c 'echo $THRUK_BROWSER'"
+  register: site_thruk_browser
+  changed_when: false
+
+- name: "libraries of chrome-headless-shell"
+  include_role:
+    name: yum_apt_retry
+  vars:
+    rpm:
+      - alsa-lib
+      - atk
+      - at-spi2-atk
+      - at-spi2-core
+      - cups-libs
+      - libdrm
+      - libXcomposite
+      - libXdamage
+      - libxkbcommon
+      - libXrandr
+      - mesa-libgbm
+      - nss
+      - pango
+      - cairo
+      - unzip
+    deb:
+      - libatk1.0-0
+      - libatk-bridge2.0-0
+      - libatspi2.0-0
+      - libgbm1
+      - libnspr4
+      - libnss3
+      - libxcomposite1
+      - libxdamage1
+      - libxfixes3
+      - libxkbcommon0
+      - libxrandr2
+      - libpango-1.0-0
+      - unzip
+  when: site_thruk_browser.stdout == ""
+
+- name: "install a browser for rendering"
+  shell: "/thruk/script/install_browser.sh"
+  args:
+    creates: /var/lib/thruk/browser/chrome-headless-shell/chrome-headless-shell
+  when: site_thruk_browser.stdout == ""
