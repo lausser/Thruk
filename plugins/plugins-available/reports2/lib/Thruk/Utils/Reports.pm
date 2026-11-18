@@ -1515,6 +1515,8 @@ sub read_report_file {
 
         # strip performance debug output
         $report->{'error'}  =~ s%^\[.*INFO.*Req:.*$%%gmx;
+        # note of the renderer, the report was rendered without browser sandbox
+        $report->{'error'}  =~ s%^browser\ did\ not\ start\ with\ sandbox\ .*,\ sandbox\ is\ off\ for\ this\ run$%%gmx;
         if($report->{'error'} =~ m%\S+%mx) {
             $report->{'failed'} = 1;
             $report->{'var'}->{'is_running'} = 0;
