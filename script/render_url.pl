@@ -37,6 +37,7 @@ See https://www.thruk.org/documentation/faq.html#chromium for details.
 use warnings;
 use strict;
 use Errno;
+use Fcntl ();
 use File::Basename qw/dirname/;
 use File::Temp qw/tempdir/;
 use IO::Handle;
@@ -266,9 +267,9 @@ sub start_browser {
         ## use critic
         POSIX::setpgid(0, 0);
         close($p_wr); close($p_rd);
-        my($rd, $wr) = (fileno($c_rd), fileno($c_wr));
-        # move them out of the way first, they might be 3 or 4 already
-        my $rd2 = POSIX::dup2($rd, 10); my $wr2 = POSIX::dup2($wr, 11);
+        # move them out of the way first, they might be 3 or 4 already. Copies to free fds above 4,
+        # fixed numbers could be taken by another open fd (the web server has many open).
+        my $rd2 = fcntl($c_rd, Fcntl::F_DUPFD(), 5); my $wr2 = fcntl($c_wr, Fcntl::F_DUPFD(), 5);
         POSIX::dup2($rd2, 3); POSIX::dup2($wr2, 4);
         POSIX::close($rd2); POSIX::close($wr2);
         open(STDIN,  '<', '/dev/null');

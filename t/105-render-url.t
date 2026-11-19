@@ -471,6 +471,14 @@ for my $sig (qw/TERM INT HUP/) {
     like($r->{'out'}, qr/^rendering\ test\ OK$/mx, "sandbox retry: rendering works");
     _no_leftovers($r, "sandbox retry");
 
+    # the retry gets other fd numbers than the first start, some open fds put its pipes on 10 and 11
+    for my $n (0..8) {
+        my $open = join(" ", map { ($_ + 2)."</dev/null" } 1..$n);
+        $r = _run(['/bin/bash', '-c', ($open ? 'exec '.$open.'; ' : '').'exec "$0" --selftest', $html2pdf], THRUK_BROWSER => "$tmp/br_nosbx.sh");
+        is($r->{'rc'}, 0, "sandbox retry with $n more open fds: exit code 0") or diag($r->{'out'}.$r->{'err'});
+        like($r->{'out'}, qr/^rendering\ test\ OK$/mx, "sandbox retry with $n more open fds: rendering works");
+    }
+
     # browser which hangs at start: one time limit per attempt
     $r = _run(_renderer("$local/plain", "$tmp/hangstart.pdf", 1600, 1200, ""), THRUK_BROWSER => "$tmp/br_hang.sh", START_TIMEOUT => 3);
     is($r->{'rc'}, 1, "browser hangs at start: exit code 1");
