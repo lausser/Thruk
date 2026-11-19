@@ -187,8 +187,10 @@
     - install_browser_script.stat.exists
     - site_thruk_browser.stdout == ""
 
+# start.sh exports OMD_ROOT for root, the selftest would then create $OMD_ROOT/tmp/thruk as root
+# and the following 'omd start' fails to chmod it.
 - name: "install a browser for rendering"
-  shell: "/thruk/script/install_browser.sh"
+  shell: "env -u OMD_ROOT /thruk/script/install_browser.sh"
   args:
     creates: /var/lib/thruk/browser/chrome-headless-shell/chrome-headless-shell
   when:
