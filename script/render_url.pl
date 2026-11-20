@@ -281,6 +281,9 @@ sub start_browser {
             '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
             '--disable-background-networking', '--disable-default-apps', '--disable-breakpad',
             '--disable-dev-shm-usage', '--password-store=basic', '--use-mock-keychain',
+            # chrome-headless-shell hints fonts fully, full Chrome (used by puppeteer before) does not.
+            # Hinting snaps glyphs to whole pixels, small text gets narrower and ocr of small graphs fails.
+            '--font-render-hinting=none',
         );
         push @args, '--no-sandbox', '--disable-setuid-sandbox' unless $sandbox;
         { exec($exe, @args, 'about:blank'); }
