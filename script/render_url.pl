@@ -281,7 +281,7 @@ sub start_browser {
             '--no-first-run', '--no-default-browser-check', '--disable-extensions', '--disable-sync',
             '--disable-background-networking', '--disable-default-apps', '--disable-breakpad',
             '--disable-dev-shm-usage', '--password-store=basic', '--use-mock-keychain',
-            # chrome-headless-shell hints fonts fully, full Chrome (used by puppeteer before) does not.
+            # chrome-headless-shell hints fonts fully, full Chrome (used by the node renderer before) does not.
             # Hinting snaps glyphs to whole pixels, small text gets narrower and ocr of small graphs fails.
             '--font-render-hinting=none',
         );
