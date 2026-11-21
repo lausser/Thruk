@@ -2377,6 +2377,12 @@ sub update_cron_file {
         $sections->{$section} = [];
         for my $entry (@{$entries}) {
             next unless $entry->[0];
+            # a CR/LF in the time entry would become a second, complete crontab
+            # line and run as the cron user, so refuse it
+            if($entry->[0] =~ m/[\r\n]/mx) {
+                _warn("refusing cron entry with a line break: %s", $entry->[0]);
+                next;
+            }
             push @{$sections->{$section}}, $entry->[0]." ".$user.$entry->[1];
         }
     }
@@ -2819,6 +2825,27 @@ sub get_cron_entries_from_param {
         if(defined $params->{'send_type_'.$x}) {
             $params->{'week_day_'.$x} = [] unless defined $params->{'week_day_'.$x};
             my @weekdays = ref $params->{'week_day_'.$x} eq 'ARRAY' ? @{$params->{'week_day_'.$x}} : ($params->{'week_day_'.$x});
+            # field values reach the cron file via get_cron_time_entry() without
+            # further validation; anything that is not a plain cron component
+            # (notably CR/LF or shell metacharacters) could break out into a
+            # second, complete crontab entry (command execution as the cron
+            # user), so it must be refused
+            my %valid = (
+                'send_minute'   => qr{\A[0-9*,/-]*\z}mx,
+                'send_hour'     => qr{\A[0-9*,/-]*\z}mx,
+                'send_day'      => qr{\A[0-9*,/-]*\z}mx,
+                'send_monthday' => qr{\A[A-Za-z0-9_]*\z}mx,
+                'send_cust'     => qr{\A[0-9A-Za-z*,/-]+(?:[ \t]+[0-9A-Za-z*,/-]+){4}\z}mx,
+                'week_day'      => qr{\A[0-9*,]*\z}mx,
+            );
+            for my $field (keys %valid) {
+                my $value = $params->{$field.'_'.$x};
+                next unless defined $value;
+                for my $v (ref $value eq 'ARRAY' ? @{$value} : ($value)) {
+                    next if !defined $v || $v eq '';
+                    confess('invalid schedule field ' . $field . '_'.$x) unless $v =~ $valid{$field};
+                }
+            }
             @weekdays = grep {!/^$/mx} @weekdays;
             my $type = $params->{'send_type_'.$x} || '';
             my $cust = $params->{'send_cust_'.$x} || '';
@@ -3688,20 +3715,29 @@ sub get_timezone_data {
 
             # check if update already running
             # and start update in background otherwise
-            if($data->{'update_job'}) {
-                if(!Thruk::Utils::External::is_running($c, $data->{'update_job'}, 1)) {
+            # (jobs disabled/noexternalforks make External::perl return no job id)
+            my $job = $data->{'update_job'};
+            $job = undef if $job && $job !~ m%^\d{5,}$%mx;
+            if($job) {
+                if(!Thruk::Utils::External::is_running($c, $job, 1)) {
                     delete $data->{'update_job'};
                     $cache->set('timezones', $data);
                 }
             } elsif(!$force) {
                 # start update in background
-                my $job = Thruk::Utils::External::perl($c, {
+                my $newjob = Thruk::Utils::External::perl($c, {
                     expr       => ['Thruk::Utils::get_timezone_data', $c, undef, 1],
                     allow      => 'all',
                     background => 1,
                 });
-                $data->{'update_job'} = $job;
-                $cache->set('timezones', $data);
+                if(defined $newjob && $newjob =~ m%^\d{5,}$%mx) {
+                    $data->{'update_job'} = $newjob;
+                    $cache->set('timezones', $data);
+                } else {
+                    # no job was started (jobs disabled), the update ran inline
+                    # and already refreshed the cache
+                    $data = $cache->get('timezones');
+                }
             }
         }
         $timezones = $data->{'timezones'} unless $force;
@@ -4446,7 +4482,8 @@ sub _enhance_histou_url {
 
     if($obj->{'check_interval'}) {
         my $interval_length = $c->stash->{'pi_detail'}->{$obj->{'peer_key'}}->{'interval_length'} // 60;
-        $url = $url.'&spannulls='.($obj->{'check_interval'} * $interval_length * 2);
+        my $spannulls_multiplier = $c->config->{'spannulls_multiplier'} // 2.5;
+        $url = $url.'&spannulls='.($obj->{'check_interval'} * $interval_length * $spannulls_multiplier);
     }
 
     $url = $url.'&hideLogo=1';
