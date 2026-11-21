@@ -15,6 +15,22 @@ next:
               could be smuggled in via the report send_types API
           - Graphs:
             - add new option 'spannulls_multiplier' which controls the parameter for histou graphs
+          - Reports:
+            - replace puppeteer by direct control of the chromium browser for pdf and image export.
+              NodeJS and npm are no longer required at runtime. What to do after the update:
+              - OMD: nothing
+              - other installations: run /usr/share/thruk/script/html2pdf.sh --selftest. If it finds
+                no browser, install the chromium package of your distribution or run
+                /usr/share/thruk/script/install_browser.sh. The reports page shows a warning
+                as long as no browser is found.
+              - PUPPETEER_* settings are ignored, use THRUK_BROWSER to select a browser.
+                The folder /var/lib/thruk/puppeteer is not used anymore and can be removed.
+              - see https://www.thruk.org/documentation/faq.html#chromium
+            - start the browser with its sandbox, fall back to no sandbox if it does not start
+              (THRUK_BROWSER_NO_SANDBOX=1 disables the sandbox)
+            - settings in thruk.env and ~/.thruk (ex.: WAIT_TIMEOUT) work without export now
+            - remove the session cookie as soon as a rendered page leaves the allowed host
+              or embeds a page from another host
 
 3.32     Wed Nov 18 16:51:11 CET 2026
           - add Status Replay with a playable log-based host and service status timeline
@@ -67,21 +83,9 @@ next:
           - Reports:
             - fix log authorization in event reports
             - reject submitted report runtime state
-            - replace puppeteer by direct control of the chromium browser for pdf and image export.
-              NodeJS and npm are no longer required at runtime. What to do after the update:
-              - OMD: nothing
-              - other installations: run /usr/share/thruk/script/html2pdf.sh --selftest. If it finds
-                no browser, install the chromium package of your distribution or run
-                /usr/share/thruk/script/install_browser.sh. The reports page shows a warning
-                as long as no browser is found.
-              - PUPPETEER_* settings are ignored, use THRUK_BROWSER to select a browser.
-                The folder /var/lib/thruk/puppeteer is not used anymore and can be removed.
-              - see https://www.thruk.org/documentation/faq.html#chromium
-            - start the browser with its sandbox, fall back to no sandbox if it does not start
-              (THRUK_BROWSER_NO_SANDBOX=1 disables the sandbox)
-            - settings in thruk.env and ~/.thruk (ex.: WAIT_TIMEOUT) work without export now
-            - remove the session cookie as soon as a rendered page leaves the allowed host
-              or embeds a page from another host
+            - fix remote response parsing in puppeteer renderer
+            - make puppeteer loader work on node 16 through 26 and with ESM
+              module layouts, so graph and PDF export keep working after the OMD node update
           - Trends:
             - fix authorization for saved graphs
 
