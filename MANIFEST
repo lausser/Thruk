@@ -2374,6 +2374,7 @@ t/019-Thruk-Utils-OAuth.t
 t/020-Log-Log4perl.t
 t/021-Log-Log4perl-Forks.t
 t/022-Thruk-Utils-Log.t
+t/023-Thruk-Sigpipe-Handler.t
 t/070-template_errors.t
 t/071-template_encoding.t
 t/081-modules.t
@@ -2448,6 +2449,7 @@ t/114-thruk_utils_filter_custom_vars.t
 t/115-thruk_utils_custom_vars.t
 t/120-ssi-includes.t
 t/130-Thruk-Stats-escape.t
+t/140-panorama_tooltip_xss.t
 t/150-config-sitepanel.t
 t/200-view_Excel.t
 t/200-view_GD.t

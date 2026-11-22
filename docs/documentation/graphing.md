@@ -26,8 +26,9 @@ define service {
 }
 ```
 
-Thruk inserts the value verbatim into an +<a href=\'action_url\'>+.
-The quoting adds extra HTML parameters.
+The stock OMD `host-pnp` and `srv-pnp` templates work with
+`escape_action_url_html = 1`. Thruk recognizes the matching graph and popup
+URLs and generates the `tips` class and `rel` URL used by the PNP hover SSI.
 
 ::: tip templates
 Often you can use the templates 'host-pnp' or 'srv-pnp' which set the right action_url automatically.
