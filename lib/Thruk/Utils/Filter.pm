@@ -525,6 +525,38 @@ sub uri_with {
 
 ########################################
 
+=head2 is_local_redirect
+
+Returns true for relative redirect targets, including paths that start with a single slash.
+
+=cut
+sub is_local_redirect {
+    my($url) = @_;
+    return unless defined $url && !ref $url && length $url;
+    return $url !~ m{\A\s*(?:[a-z][a-z0-9+.-]*:|[/\\]{2}|\\)|[\x00-\x1f\x7f]}imx;
+}
+
+########################################
+
+=head2 is_safe_bookmark_url
+
+  is_safe_bookmark_url($url)
+
+returns 1 if the url does not use an executable url scheme
+(javascript:, data:, vbscript:, file:), 0 otherwise.
+
+=cut
+sub is_safe_bookmark_url {
+    my($url) = @_;
+    # browsers trim leading whitespace before the scheme, so match after any
+    # leading whitespace; scheme comparison is case-insensitive
+    return 0 if defined $url and $url =~ m/^\s*(?:javascript|data|vbscript|file):/imx;
+    return 1;
+}
+
+
+########################################
+
 =head2 as_url_arg
 
   as_url_arg($str)
@@ -1746,11 +1778,11 @@ sub replace_links {
     for my $pattern (@{$c->config->{'short_link'}}) {
         my @blocks = split(/\|/mx, $pattern);
         shift @blocks if $blocks[0] eq '';
-        ## no critic
+        ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         my $re1 = qr($blocks[0]);
         my $re2 = $blocks[1];
         $txt =~ s|$re1|&_replace_dollars($re2, $1, $2, $3, $4, $5)|ge;
-        ## use critic
+        ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
     }
 
     # markup link: [link text](https://url...)
@@ -1783,10 +1815,10 @@ sub replace_copy_paste {
 
     # copy paste links
     for my $pattern (@{$c->config->{'copy_paste_link'}}) {
-        ## no critic
+        ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         my $re1 = qr($pattern);
         $txt =~ s|$re1|&_replace_dollars($link, $1, $2, escape_js($2), $3)|ge;
-        ## use critic
+        ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
     }
 
     return($txt);
@@ -1906,7 +1938,7 @@ sub _find_target_for_link {
         _error("cannot parse '$t': $target not defined") unless $target;
         _error("cannot parse '$t': $regex not defined") unless $regex;
         next if (!$target || !$regex);
-        if($href =~ /$regex/) { ## no critic
+        if($href =~ /$regex/) { ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return $target;
         }
     }

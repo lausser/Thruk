@@ -13,6 +13,7 @@ Utilities Collection for Thruk
 use warnings;
 use strict;
 use Carp qw/confess longmess/;
+use Cpanel::JSON::XS ();
 use Data::Dumper qw/Dumper/;
 use Date::Calc qw/Localtime Monday_of_Week Week_of_Year Today Add_Delta_Days/;
 use File::Copy qw/copy/;
@@ -30,6 +31,40 @@ use Thruk::Utils::Log qw/:all/;
 
 ##############################################
 =head1 METHODS
+
+=head2 sort_rows
+
+  my $sorted = sort_rows($data, $specs)
+
+sort an arrayref of hashrefs by the given columns. The sort keys stay data and
+are never interpolated into source, so they cannot change the evaluated code.
+
+  $data is an arrayref of hashrefs.
+  $specs is an arrayref of { key => $field, order => 'asc'|'desc', numeric => 1|0 }
+
+=cut
+
+sub sort_rows {
+    my($data, $specs) = @_;
+
+    ## no critic (TestingAndDebugging::ProhibitNoWarnings)
+    no warnings;    # sorting by undef values generates lots of errors
+    my $compare = sub {
+        my($a, $b) = @_;
+        for my $s (@{$specs}) {
+            my $r = $s->{'numeric'}
+                ? ($a->{$s->{'key'}} <=> $b->{$s->{'key'}})
+                : ($a->{$s->{'key'}} cmp $b->{$s->{'key'}});
+            $r = -$r if $s->{'order'} eq 'desc';
+            return $r if $r;
+        }
+        return 0;
+    };
+    my @sorted = sort { $compare->($a, $b) } @{$data};
+    use warnings;
+    ## use critic (TestingAndDebugging::ProhibitNoWarnings)
+    return \@sorted;
+}
 
 =head2 parse_date
 
@@ -875,21 +910,21 @@ sub get_custom_vars {
             for my $pattern (@{Thruk::Base::list($c->config->{'action_menu_apply'}->{$menu})}) {
                 if(!$prefix && $data->{'description'}) {
                     my $test = $data->{'host_name'}.';'.$data->{'description'};
-                    ## no critic
+                    ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                     if($test =~ m/$pattern/) {
                         $data->{'custom_variables'}->{$prefix.'THRUK_ACTION_MENU'} = $menu;
                         last APPLY;
                     }
-                    ## use critic
+                    ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 }
                 elsif($data->{$prefix.'name'}) {
                     my $test = $data->{$prefix.'name'}.';';
-                    ## no critic
+                    ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                     if($test =~ m/$pattern/) {
                         $data->{$prefix.'custom_variables'}->{'THRUK_ACTION_MENU'} = $menu;
                         last APPLY;
                     }
-                    ## use critic
+                    ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 }
             }
         }
@@ -2097,10 +2132,10 @@ sub get_action_url {
             $action_url =~ s/(index.php.*?)'/$1&theme=smoothness'/mx;
         }
         # replace spaces in host / service names
-        ## no critic
+        ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         $action_url =~ s/(host=)(.*?)(&)/_replace_url_spaces($1, $2, $3)/ge;
         $action_url =~ s/(srv=)(.*?)(&)/_replace_url_spaces($1, $2, $3)/ge;
-        ## use critic
+        ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         $action_url =~ s/&amp;/&/gmx;
         $action_url =~ s/\+/%2B/gmx;
         return Thruk::Utils::Filter::escape_html($action_url) if $escape_html;
@@ -2133,17 +2168,17 @@ sub get_action_url {
             if ($action_url =~ m|$regex|mx){
                 my $new_host = $host;
                 for my $regex (@{$c->config->{'graph_replace'}}) {
-                    ## no critic
+                    ## no critic (BuiltinFunctions::ProhibitStringyEval)
                     eval('$new_host =~ '.$regex);
-                    ## use critic
+                    ## use critic (BuiltinFunctions::ProhibitStringyEval)
                 }
 
                 if ($svc) {
                     my $new_svc = $svc;
                     for my $regex (@{$c->config->{'graph_replace'}}) {
-                        ## no critic
+                        ## no critic (BuiltinFunctions::ProhibitStringyEval)
                         eval('$new_svc =~ '.$regex);
-                        ## use critic
+                        ## use critic (BuiltinFunctions::ProhibitStringyEval)
                     }
                     $new_action_url =~ s/\Q$svc\E/$new_svc/gmx;
                 }
@@ -2639,14 +2674,14 @@ switch real user and groups
 =cut
 
 sub switch_realuser {
-    ## no critic
+    ## no critic (Variables::RequireLocalizedPunctuationVars)
     if($< != $>) {
         $< = $> or confess("setuid failed: ".$!);
     }
     if($) != $() {
         $( = $) or confess("setgid failed: ".$!);
     }
-    ## use critic
+    ## use critic (Variables::RequireLocalizedPunctuationVars)
     return;
 }
 
@@ -3069,11 +3104,10 @@ sub get_template_variable {
     }
     POSIX::setlocale(POSIX::LC_TIME, $default_time_locale);
 
-    my $VAR1;
-    ## no critic
-    eval($data);
-    ## use critic
-    return $VAR1;
+    # the template renders the variable as json, decode it
+    my $res = Cpanel::JSON::XS->new->decode($data);
+    return($res->[0]) if ref $res eq 'ARRAY';
+    confess("Unexpected template variable format: $data");
 }
 
 ##############################################
@@ -3106,9 +3140,9 @@ sub precompile_templates {
     my $num = 0;
     my $stderr_output;
     do {
-        ## no critic
+        ## no critic (Variables::RequireInitializationForLocalVars)
         local *STDERR;
-        ## use critic
+        ## use critic (Variables::RequireInitializationForLocalVars)
         eval {
             open(STDERR, ">>", \$stderr_output);
         };

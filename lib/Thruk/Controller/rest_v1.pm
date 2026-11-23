@@ -1244,10 +1244,10 @@ sub _apply_data_function {
         my $replace = _trim_quotes($args->[1]);
         die("usage: s(column, 'regexp', 'replacement')") if(!$regexp || !defined $replace);
         $regexp = _trim_re($regexp);
-        ## no critic
+        ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         my $re = qr($regexp);
         $val =~ s/$re/$replace/g;
-        ## use critic
+        ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         return $val;
     }
     if($name eq 'concat') {
@@ -1308,9 +1308,9 @@ sub _apply_data_function {
             }
         }
         {
-            ## no critic
+            ## no critic (TestingAndDebugging::ProhibitNoWarnings)
             no warnings; # skip warnings for format string issues
-            ## use critic
+            ## use critic (TestingAndDebugging::ProhibitNoWarnings)
             $val = sprintf($fmt, @values);
             use warnings;
         }
@@ -1441,7 +1441,7 @@ sub _apply_sort {
 
     my $alias_columns = get_aliased_columns($c);
 
-    my @compares;
+    my @specs;
     for my $key (@{$sort}) {
         my $order = 'asc';
         if($key =~ m/^\-/mx) {
@@ -1453,41 +1453,13 @@ sub _apply_sort {
 
         $key = $alias_columns->{$key}->{'orig'} if defined $alias_columns->{$key};
 
-        # Backslashes can escape the quotes in the generated comparator.
-        die("sort key contains invalid characters") if($key =~ m/[\\`\$>'"]/mx);
-
-        # sort numeric
-        if( defined $data->[0]->{$key} and Thruk::Backend::Manager::looks_like_number($data->[0]->{$key}) ) {
-            if($order eq 'asc') {
-                push @compares, '$a->{"'.$key.'"} <=> $b->{"'.$key.'"}';
-            } else {
-                push @compares, '$b->{"'.$key.'"} <=> $a->{"'.$key.'"}';
-            }
-        }
-
-        # sort alphanumeric
-        else {
-            if($order eq 'asc') {
-                push @compares, '$a->{\''.$key.'\'} cmp $b->{\''.$key.'\'}';
-            } else {
-                push @compares, '$b->{\''.$key.'\'} cmp $a->{\''.$key.'\'}';
-            }
-        }
-    }
-    my $sortstring = join( ' || ', @compares );
-
-    my @sorted;
-    ## no critic
-    no warnings;    # sorting by undef values generates lots of errors
-    eval '@sorted = sort {'.$sortstring.'} @{$data};';
-    use warnings;
-    ## use critic
-
-    if(scalar @sorted == 0 && $@) {
-        confess($@);
+        # sort numeric if the first row holds a number
+        my $numeric = ( defined $data->[0]->{$key} and Thruk::Backend::Manager::looks_like_number($data->[0]->{$key}) ) ? 1 : 0;
+        push @specs, { key => $key, order => $order, numeric => $numeric };
     }
 
-    return \@sorted;
+    # the sort keys stay data and are not interpolated into source code
+    return Thruk::Utils::sort_rows($data, \@specs);
 }
 
 ##########################################################
@@ -3127,9 +3099,9 @@ sub _match_complex_filter {
 sub _compare {
     my($op, $data, $val) = @_;
 
-    ## no critic
+    ## no critic (TestingAndDebugging::ProhibitNoWarnings)
     no warnings;
-    ## use critic
+    ## use critic (TestingAndDebugging::ProhibitNoWarnings)
     my @filtered;
     if($op eq '=') {
         if(ref $data eq 'ARRAY') {
@@ -3151,18 +3123,18 @@ sub _compare {
         if(ref $data eq 'ARRAY') {
             my $found;
             for my $v (@{$data}) {
-                ## no critic
+                ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 if($v =~ m/$val/) {
                     $found = 1;
                     last;
                 }
-                ## use critic
+                ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             }
             return $found;
         } else {
-            ## no critic
+            ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return 1 if $data =~ m/$val/;
-            ## use critic
+            ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         }
         return;
     }
@@ -3170,18 +3142,18 @@ sub _compare {
         if(ref $data eq 'ARRAY') {
             my $found;
             for my $v (@{$data}) {
-                ## no critic
+                ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 if($v =~ m/$val/i) {
                     $found = 1;
                     last;
                 }
-                ## use critic
+                ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             }
             return $found;
         } else {
-            ## no critic
+            ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return 1 if $data =~ m/$val/i;
-            ## use critic
+            ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
         }
         return;
     }
@@ -3189,18 +3161,18 @@ sub _compare {
         if(ref $data eq 'ARRAY') {
             my $found;
             for my $v (@{$data}) {
-                ## no critic
+                ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 if($v =~ m/$val/) {
                     $found = 1;
                     last;
                 }
-                ## use critic
+                ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             }
             return !$found;
         } else {
-            ## no critic
+            ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return 1 if $data !~ m/$val/;
-            ## use critic
+            ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return;
         }
     }
@@ -3208,18 +3180,18 @@ sub _compare {
         if(ref $data eq 'ARRAY') {
             my $found;
             for my $v (@{$data}) {
-                ## no critic
+                ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
                 if($v =~ m/$val/i) {
                     $found = 1;
                     last;
                 }
-                ## use critic
+                ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             }
             return !$found;
         } else {
-            ## no critic
+            ## no critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return 1 if $data !~ m/$val/i;
-            ## use critic
+            ## use critic (RegularExpressions::RequireExtendedFormatting, RegularExpressions::RequireLineBoundaryMatching)
             return;
         }
     }

@@ -64,10 +64,10 @@ sub new {
 
     # change into home folder so we can use relative paths
     if($ENV{'OMD_ROOT'}) {
-        ## no critic
+        ## no critic (Variables::RequireLocalizedPunctuationVars)
         $ENV{'THRUKOLDPWD'} = Cwd::getcwd();
         $ENV{'HOME'} = $ENV{'OMD_ROOT'};
-        ## use critic
+        ## use critic (Variables::RequireLocalizedPunctuationVars)
         chdir($ENV{'HOME'});
     }
 
@@ -100,10 +100,10 @@ sub new {
 
     if($config->{'use_lmd_core'}) {
         $pool_size = 1; # no pool required when using lmd core
-        ## no critic
+        ## no critic (Variables::RequireLocalizedPunctuationVars)
         $ENV{'THRUK_NO_CONNECTION_POOL'} = 1;
         $ENV{'THRUK_USE_LMD'} = 1;
-        ## use critic
+        ## use critic (Variables::RequireLocalizedPunctuationVars)
         eval {
             Thruk::Utils::IO::mkdir_r($config->{'tmp_path'}.'/lmd') ;
         };
@@ -171,9 +171,9 @@ sub new {
         &timing_breakpoint('peers created');
         if($pool_size > 1) {
             printf(STDERR "mem:% 7s MB before pool with %d members\n", Thruk::Utils::IO::get_memory_usage(), $pool_size) if($ENV{'THRUK_PERFORMANCE_DEBUG'} && $ENV{'THRUK_PERFORMANCE_DEBUG'} >= 2);
-            ## no critic
+            ## no critic (Variables::RequireLocalizedPunctuationVars)
             $SIG{'USR1'}  = undef if $SIG{'USR1'};
-            ## use critic
+            ## use critic (Variables::RequireLocalizedPunctuationVars)
             require Thruk::Pool::Simple;
             $self->{'thread_pool'} = Thruk::Pool::Simple->new(
                 size    => $pool_size,
@@ -183,9 +183,9 @@ sub new {
             printf(STDERR "mem:% 7s MB after pool\n", Thruk::Utils::IO::get_memory_usage()) if($ENV{'THRUK_PERFORMANCE_DEBUG'} && $ENV{'THRUK_PERFORMANCE_DEBUG'} >= 2);
         } else {
             printf(STDERR "mem:% 7s MB without pool\n", Thruk::Utils::IO::get_memory_usage()) if($ENV{'THRUK_PERFORMANCE_DEBUG'} && $ENV{'THRUK_PERFORMANCE_DEBUG'} >= 2);
-            ## no critic
+            ## no critic (Variables::RequireLocalizedPunctuationVars)
             $ENV{'THRUK_NO_CONNECTION_POOL'} = 1;
-            ## use critic
+            ## use critic (Variables::RequireLocalizedPunctuationVars)
         }
     }
 
@@ -295,34 +295,12 @@ run a function on a backend peer
 sub do_on_peer {
     my($self, $key, $function, $arg) = @_;
 
-    # make it possible to run code in thread context
     my $arg_hash = {};
     if(ref $arg eq 'ARRAY') {
         for(my $x = 0; $x < scalar @{$arg}; $x += 2) {
+            # 'eval' used to execute the next arg as perl in the worker (GHSA-44p7-p5wf-qw57); reject it
+            confess("eval argument not allowed") if defined $arg->[$x] && $arg->[$x] eq 'eval';
             $arg_hash->{$arg->[$x]} = $arg->[$x+1];
-            if($arg->[$x] and $arg->[$x] eq 'eval') {
-                my $inc;
-                my $code = $arg->[$x+1];
-                if(ref($code) eq 'HASH') {
-                    for my $path ('/', (defined $ENV{'OMD_ROOT'} ? $ENV{'OMD_ROOT'}.'/share/thruk/plugins/plugins-available/' : Cwd::getcwd().'/plugins/plugins-available/')) {
-                        if(-e $path.'/'.$code->{'inc'}) {
-                            $inc  = $path.'/'.$code->{'inc'};
-                            last;
-                        }
-                    }
-                    $code = $code->{'code'};
-                    push @INC, $inc if $inc;
-                }
-                ## no critic
-                eval($code);
-                ## use critic
-                if($@) {
-                    require Data::Dumper;
-                    Data::Dumper->import();
-                    die("eval failed:".Dumper(Cwd::getcwd(), $arg, $@));
-                }
-                pop @INC if $inc;
-            }
         }
     }
 

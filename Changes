@@ -59,6 +59,31 @@ next:
             - settings in thruk.env and ~/.thruk (ex.: WAIT_TIMEOUT) work without export now
             - remove the session cookie as soon as a rendered page leaves the allowed host
               or embeds a page from another host
+          - treat REST and backend sort keys as data and not as code (GHSA-rjfp-vvx9-76vh)
+          - escape plugin output in the availability outage report by default (GHSA-7qph-3mcp-cvqw)
+          - escape plugin output in the reports2 SLA report by default
+          - escape plugin output in the trends image map by default
+          - escape names in panorama icon tooltip details (GHSA-j445-m9r7-q45g)
+          - escape action and notes links by default
+          - escape host and service notes on extinfo pages by default (GHSA-7vgh-mrgh-h79w)
+          - escape names in panorama grids and mine map
+          - escape authors and comments in the panorama comments grid (GHSA-wm48-j98q-3x77)
+          - escape names and debug hints in generated profile HTML (GHSA-ww3m-8p89-562g)
+          - escape comment authors in the comments table (GHSA-69wg-g5h9-ghjg)
+          - refuse cron schedule entries with malformed fields
+          - escape the error and referer parameters of the command form
+          - escape report name and description in generated report pages
+          - require authorized_for_reports on the report REST routes ( GHSA-j4w6-p83g-g5qf)
+          - refuse cron entries containing a line break ( GHSA-3cjx-6wcv-r6g9)
+          - refuse bookmarks with executable url schemes (GHSA-w5pf-vr4p-h335)
+          - refuse a caller-provided 'eval' argument pair in remote.cgi (GHSA-44p7-p5wf-qw57)
+          - sanitize pnp graph export source (GHSA-fjj8-9jv6-5g6p)
+          - escape html in the action url (GHSA-7xch-vwp2-xvcr)
+          - escape html in bookmark links (GHSA-4f3q-c36g-2h2q)
+          - restrict report_from_url to allowed hosts (GHSA-j7m6-r8rq-xgm9)
+          - sanitize command argument input ( GHSA-4r78-rwq7-mmfv)
+          - add report_allow_url_hosts option
+          - add option 'spannulls_multiplier' for histou graphs
 
 3.32     Wed Nov 18 16:51:11 CET 2026
           - add Status Replay with a playable log-based host and service status timeline
