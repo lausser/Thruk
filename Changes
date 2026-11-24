@@ -59,6 +59,7 @@ next:
             - settings in thruk.env and ~/.thruk (ex.: WAIT_TIMEOUT) work without export now
             - remove the session cookie as soon as a rendered page leaves the allowed host
               or embeds a page from another host
+          - prevent Perl execution in REST CLI output arithmetic (GHSA-j8xr-cx52-cxj9)
           - treat REST and backend sort keys as data and not as code (GHSA-rjfp-vvx9-76vh)
           - escape plugin output in the availability outage report by default (GHSA-7qph-3mcp-cvqw)
           - escape plugin output in the reports2 SLA report by default

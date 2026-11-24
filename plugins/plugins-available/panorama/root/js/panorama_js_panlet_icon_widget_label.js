@@ -1,3 +1,60 @@
+TP.labelPolicy = {
+    tags: ['b', 'i', 'u', 'strong', 'em', 'center', 'br', 'span', 'div', 'p', 'small', 'sub', 'sup', 'img', 'font'],
+    presentation: {
+        img:  ['border', 'width', 'height', 'hspace', 'vspace', 'align'],
+        div:  ['align'],
+        p:    ['align'],
+        br:   ['clear'],
+        font: ['color', 'face', 'size']
+    },
+    styles: ['color', 'background-color', 'background-image', 'font-size', 'font-weight', 'font-style', 'text-align', 'text-decoration',
+             'border', 'border-top', 'border-right', 'border-bottom', 'border-left', 'border-width', 'border-style',
+             'border-color', 'border-radius'],
+    imageURL: function(src) {
+        try {
+            var url = new URL(src, document.baseURI);
+            if(/^https?:$/.test(url.protocol) && url.origin == window.location.origin && /\.(?:png|gif|jpe?g|webp|svg)$/i.test(url.pathname)) {
+                return url.href;
+            }
+        } catch(err) { /* Invalid URL. */ }
+    },
+    attributes: {
+        title: function(node, el) { el.title = node.title; },
+        alt: function(node, el) { if(el.localName == 'img') { el.alt = node.alt; } },
+        src: function(node, el) {
+            if(el.localName == 'img') {
+                var src = TP.labelPolicy.imageURL(node.getAttribute('src'));
+                if(src) { el.src = src; }
+            }
+        },
+        'class': function(node, el) { el.className = node.className; },
+        style: function(node, el) {
+            TP.labelPolicy.styles.forEach(function(prop) {
+                var value = node.style.getPropertyValue(prop);
+                if(prop == 'background-image') {
+                    var match = /^url\("([^"]+)"\)$/.exec(value);
+                    var src = match && TP.labelPolicy.imageURL(match[1]);
+                    if(!src) { return; }
+                    value = 'url("'+CSS.escape(src)+'")';
+                }
+                if(value) { el.style.setProperty(prop, value); }
+            });
+        }
+    },
+    functions: {
+        strftime: { run: function(args) { return strftime.apply(null, args); } },
+        sprintf:  { run: function(args) { return sprintf.apply(null, args); } },
+        nl2br:    { run: function(args) { return String(args[0]).replace(/\\n/g, '\n'); } },
+        availability: {
+            options: ['d', 'tm', 's', 'h', 'downtime'],
+            run: function(args, panel) { return availability(panel, args[0]); }
+        }
+    },
+    fields: ['name', 'alias', 'state', 'host_name', 'description', 'has_been_checked', 'scheduled_downtime_depth',
+             'acknowledged', 'last_check', 'last_state_change', 'last_notification', 'plugin_output',
+             'long_plugin_output', 'trend', 'perf_data']
+};
+
 Ext.define('TP.IconLabel', {
     /* queue label renderer */
     setIconLabel: function(cfg) {
@@ -39,7 +96,7 @@ Ext.define('TP.IconLabel', {
         var panel = this;
         var txt = String(cfg.labeltext);
         if(txt == undefined) { txt = ''; }
-        panel.el.dom.title = '';
+        var warnings = TP.labelWarnings(panel, 'label');
 
         /* hide the icon element for label only appearance */
         if(panel.locked && panel.el) {
@@ -50,13 +107,16 @@ Ext.define('TP.IconLabel', {
 
         /* dynamic label? */
         if(txt.match(/\{\{.*?\}\}/)) {
-            txt = panel.setIconLabelDynamicText(txt);
+            txt = panel.setIconLabelDynamicText(txt, warnings);
 
             /* update value since it might have changed */
             if(panel.xdata.appearance.type == 'speedometer' && panel.xdata.appearance.speedosource.match(/^avail:(.*)$/)) {
                 panel.updateRender(panel.xdata);
             }
+        } else {
+            txt = TP.labelMarkup(txt, warnings);
         }
+        panel.el.dom.title = warnings.finish();
         /* no label at all */
         if(!cfg.labeltext) {
             if(panel.labelEl) { panel.labelEl.destroy(); panel.labelEl = undefined; }
@@ -67,6 +127,7 @@ Ext.define('TP.IconLabel', {
         }
         if(!panel.labelEl || !panel.labelEl.el) { return; }
         var el    = panel.labelEl.el.dom;
+        el.title = panel.el.dom.title;
         var style = el.style;
         style.zIndex = Number(panel.el.dom.style.zIndex)+1; /* keep above icon */
         var oldTxt = panel.labelEl.el.dom.innerHTML;
@@ -87,53 +148,28 @@ Ext.define('TP.IconLabel', {
         return;
     },
 
-    setIconLabelDynamicText: function(txt) {
+    setIconLabelDynamicText: function(txt, warnings) {
         var panel = this;
-        var allowed_functions = ['strftime', 'sprintf', 'if', 'availability', 'nl2br'];
         if(TP.availabilities == undefined) { TP.availabilities = {}; }
         if(TP.availabilities[panel.id] == undefined) { TP.availabilities[panel.id] = {}; }
-        var matches = txt.match(/(\{\{.*?\}\})/g);
-        var macros  = TP.getPanelMacros(panel);
-        Ext.Array.each(matches, function(item, idx) {
-            var calc      = item.replace(/^\{\{/, '').replace(/\}\}$/, '');
-            var functions = calc.match(/[\w+_]+\(/g);
-            var ok        = true;
-            // only run a few allow functions
-            Ext.Array.each(functions, function(f, idx) {
-                f = f.replace(/\($/, '');
-                if(!Ext.Array.contains(allowed_functions, f)) {
-                    debug("function "+f+" is not allowed");
-                    ok = false;
-                }
-            });
-            if(!ok) { return; }
-            var res;
-            calc = calc.replace(/availability\(/g, 'availability(panel, ');
-            if(macros[calc] != undefined) {
-                // direct match, no need for eval
-                res = macros[calc];
-            } else {
-                try {
-                    res = TP.evalInContext(calc, macros);
-                } catch(err) {
-                    TP.logError(panel.id, "labelEvalException", err);
-                    panel.el.dom.title = err;
-                }
-            }
-            if(res == undefined) { res = ''; }
-            // replace not yet resolved availabilities
-            if(calc.match(/availability\(/)) {
+        var macros = TP.getPanelMacros(panel);
+        txt = txt.replace(/\{\{(.*?)\}\}(?!\})/g, function(match, part) {
+            try {
+                TP.lastAvailError = undefined;
+                var res = TP.labelExpression(part, macros, panel, warnings);
+                res = Ext.String.htmlEncode(String(res)).replace(/\n/g, '<br>');
                 if(TP.lastAvailError) {
-                    TP.lastAvailError = TP.lastAvailError.replace(/'/g, '');
-                    TP.lastAvailError = TP.lastAvailError.replace(/ at .*?\/Thruk/g, ' at Thruk');
-                    res = "<span class='avail_result_error' title='"+TP.lastAvailError+"'>error<\/span>";
+                    var err = String(TP.lastAvailError).replace(/ at .*?\/Thruk/g, ' at Thruk');
+                    return '<span class="avail_result_error" title="'+Ext.String.htmlEncode(err)+'">error</span>';
                 }
-                else if(res.match(/\-1/)) {
-                    res = res.replace(/\-1[\.0]*/g, '...');
-                    res = "<span class='avail_result_not_ready' title='not yet ready'>"+res+"<\/span>";
+                if(/availability\s*\(/.test(part) && /-1/.test(res)) {
+                    return '<span class="avail_result_not_ready" title="not yet ready">'+res.replace(/-1[.0]*/g, '...')+'</span>';
                 }
+                return res;
+            } catch(err) {
+                warnings.add(err.labelWarning || 'Invalid label expression');
+                return '';
             }
-            txt = txt.replace(item, res);
         });
         /* remove inactive availabilities */
         var remove_older = (Math.floor(new Date().getTime()/1000)) - 120;
@@ -142,7 +178,7 @@ Ext.define('TP.IconLabel', {
                 delete TP.availabilities[panel.id][key];
             }
         }
-        return(txt);
+        return TP.labelMarkup(txt, warnings);
     },
 
     setIconLabelPosition: function(cfg) {
@@ -355,3 +391,173 @@ function nl2br(text) {
     text = text.replace(/\\n/g, "<br>");
     return(text);
 }
+
+TP.labelWarnings = function(panel, source) {
+    var messages = [];
+    return {
+        add: function(message) {
+            message = message.slice(0, 120);
+            if(messages.length < 8 && messages.indexOf(message) < 0) { messages.push(message); }
+        },
+        finish: function() {
+            var text = messages.join('; ');
+            var key = source+'Warning';
+            if(text && text != panel[key]) { console.warn('Panorama '+source+' ('+panel.id+'): '+text); }
+            panel[key] = text;
+            return text;
+        }
+    };
+};
+
+TP.labelMarkup = function(text, warnings) {
+    if(!/[<&]/.test(text)) { return text; }
+    // Parse in an inert template. Only new formatting elements enter the label.
+    var template = document.createElement('template');
+    template.innerHTML = text;
+    var label = document.createElement('div');
+    function copy(parent, target) {
+        for(var node = parent.firstChild; node; node = node.nextSibling) {
+            if(node.nodeType == 3) { target.appendChild(document.createTextNode(node.data)); continue; }
+            if(node.nodeType != 1) { continue; }
+            if(node.namespaceURI != 'http://www.w3.org/1999/xhtml' || TP.labelPolicy.tags.indexOf(node.localName) < 0) {
+                warnings.add('Removed tag: '+node.localName);
+                continue;
+            }
+            var el = document.createElement(node.localName);
+            var presentation = TP.labelPolicy.presentation[node.localName] || [];
+            presentation.forEach(function(attr) {
+                if(node.hasAttribute(attr)) { el.setAttribute(attr, node.getAttribute(attr)); }
+            });
+            Object.keys(TP.labelPolicy.attributes).forEach(function(attr) {
+                if(node.hasAttribute(attr)) { TP.labelPolicy.attributes[attr](node, el); }
+            });
+            Array.from(node.attributes).forEach(function(attr) {
+                if(attr.name != 'style' && !el.hasAttribute(attr.name)) { warnings.add('Removed attribute: '+attr.name+' on '+node.localName); }
+            });
+            Array.from(node.style).forEach(function(prop) {
+                if(!el.style.getPropertyValue(prop)) { warnings.add('Removed style: '+prop); }
+            });
+            copy(node, el);
+            target.appendChild(el);
+        }
+    }
+    copy(template.content, label);
+    return label.innerHTML;
+};
+
+TP.labelExpression = function(source, macros, panel, warnings) {
+    var tokens = source.match(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[a-zA-Z_]\w*|-?\d+(?:\.\d+)?|===|!==|==|!=|>=|<=|\S/g) || [];
+    var i = 0;
+    function invalid(message) {
+        var err = new Error(message || 'Invalid label expression');
+        err.labelWarning = err.message;
+        throw err;
+    }
+    function take(s) {
+        if(tokens[i] !== s) { return false; }
+        i++;
+        return true;
+    }
+    function need(s) { if(!take(s)) { invalid(); } }
+    function identifier(s) {
+        if(!s || !/^[a-zA-Z_]\w*$/.test(s)) { invalid(); }
+        return s;
+    }
+    function string(s) {
+        if(!s || s.length < 2 || !/^['"]/.test(s)) { invalid(); }
+        return s.slice(1,-1).replace(/\\(['"\\])/g, '$1');
+    }
+    function expression(run) {
+        var value = sum(run);
+        var op = tokens[i];
+        if(/^(===|!==|==|!=|>=|<=|>|<)$/.test(op)) {
+            i++;
+            var right = sum(run);
+            switch(op) {
+                case '===': value = value === right; break;
+                case '!==': value = value !== right; break;
+                case '==':  value = value == right; break;
+                case '!=':  value = value != right; break;
+                case '>=':  value = value >= right; break;
+                case '<=':  value = value <= right; break;
+                case '>':   value = value > right; break;
+                case '<':   value = value < right; break;
+            }
+        }
+        if(take('?')) {
+            var yes = expression(run && value);
+            need(':');
+            var no = expression(run && !value);
+            return value ? yes : no;
+        }
+        return value;
+    }
+    function sum(run) {
+        var value = term(run);
+        while(take('+')) { value += term(run); }
+        return value;
+    }
+    function term(run) {
+        var s = tokens[i++];
+        if(!s) { invalid(); }
+        if(/^['"]/.test(s)) { return string(s); }
+        if(/^-?\d/.test(s)) { return Number(s); }
+        identifier(s);
+        if(s == 'true' || s == 'false') { return s == 'true'; }
+        if(take('(')) {
+            if(s == 'if') {
+                var condition = expression(run);
+                need(')');
+                need('{');
+                var yes = expression(run && condition);
+                need('}');
+                var no = '';
+                if(take('else')) { need('{'); no = expression(run && !condition); need('}'); }
+                return condition ? yes : no;
+            }
+            if(!Object.prototype.hasOwnProperty.call(TP.labelPolicy.functions, s)) {
+                invalid('Unknown function: '+s);
+            }
+            var fn = TP.labelPolicy.functions[s];
+            var args = [];
+            if(fn.options) {
+                var opts = {};
+                need('{');
+                do {
+                    var k = tokens[i++];
+                    if(fn.options.indexOf(k) < 0) { invalid(); }
+                    need(':');
+                    opts[k] = expression(run);
+                } while(take(','));
+                need('}');
+                args.push(opts);
+            } else {
+                do { args.push(expression(run)); } while(take(','));
+            }
+            need(')');
+            return run ? fn.run(args, panel) : '';
+        }
+        var value = macros;
+        var name = s;
+        var missing = false;
+        do {
+            if(/^(?:panel|constructor|prototype|__proto__)$/.test(name)) { invalid(); }
+            if(value && typeof value == 'object' && Object.prototype.hasOwnProperty.call(value, name)) {
+                value = value[name];
+            } else {
+                if(run && !missing) { warnings.add('Unknown field: '+name); }
+                missing = true;
+                value = undefined;
+            }
+            if(take('.')) { name = identifier(tokens[i++]); }
+            else if(name == 'perfdata' && take('[')) { name = string(tokens[i++]); need(']'); }
+            else { break; }
+        } while(true);
+        if(value == null) { return ''; }
+        if(typeof value == 'object' || typeof value == 'function') { invalid(); }
+        return value;
+    }
+    var result = expression(true);
+    if(i != tokens.length) { invalid(); }
+    return result;
+};
