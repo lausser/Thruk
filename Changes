@@ -50,7 +50,7 @@ next:
               - other installations: run /usr/share/thruk/script/html2pdf.sh --selftest. If it finds
                 no browser, install the chromium package of your distribution or run
                 /usr/share/thruk/script/install_browser.sh. The reports page shows a warning
-                as long as no browser is found.
+                as long as no browser is found. The package installation also shows a note then.
               - PUPPETEER_* settings are ignored, use THRUK_BROWSER to select a browser.
                 The folder /var/lib/thruk/puppeteer is not used anymore and can be removed.
               - see https://www.thruk.org/documentation/faq.html#chromium

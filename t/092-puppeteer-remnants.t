@@ -9,6 +9,9 @@ use Test::More;
 plan skip_all => 'Author test. Set $ENV{TEST_AUTHOR} to a true value to run.' unless $ENV{TEST_AUTHOR};
 plan skip_all => 'git repository required' unless -e '.git';
 
+# the package installation tells where the old folder is
+my $package_note = qr/^\s+\[\ !\ -d\ \/var\/lib\/thruk\/puppeteer\ \]\ \|\|\ echo\ "The\ folder\ \/var\/lib\/thruk\/puppeteer\ is\ not\ used\ anymore\ and\ can\ be\ removed\."$/mx;
+
 # path => list of patterns, every line of that file which contains the name has to match one of them
 my $allowed = {
     # the entry of the release which replaced it. Entries of earlier releases are skipped below.
@@ -28,6 +31,12 @@ my $allowed = {
         qr/^Puppeteer\ is\ no\ longer\ used,\ it\ has\ been\ replaced\ by\ a\ \[chromium\]\(\#chromium\)/mx,
         qr/^NodeJS\ and\ npm\ are\ not\ required\ anymore\.\ `PUPPETEER_\*`\ settings\ are\ ignored/mx,
         qr/^The\ folder\ \/var\/lib\/thruk\/puppeteer\ is\ not\ used\ anymore/mx,
+    ],
+    'debian/thruk-plugin-reporting.postinst' => [
+        $package_note,
+    ],
+    'support/thruk.spec' => [
+        $package_note,
     ],
     # this test and its MANIFEST entry
     't/092-puppeteer-remnants.t' => [ qr/./mx ],
